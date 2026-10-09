@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plataformas- · Archivos del repositorio</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --fg: #1d2330;
+      --muted: #5b6474;
+      --card: #ffffff;
+      --accent: #2563eb;
+      --border: #dde1e8;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0f1218;
+        --fg: #e6e9ef;
+        --muted: #9aa3b2;
+        --card: #171b23;
+        --accent: #6ea8ff;
+        --border: #2a303c;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0f1218;
+      --fg: #e6e9ef;
+      --muted: #9aa3b2;
+      --card: #171b23;
+      --accent: #6ea8ff;
+      --border: #2a303c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 16px;
+    }
+    h1 { font-size: 1.75rem; margin: 0 0 4px; }
+    .lead { color: var(--muted); margin: 0 0 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    h2 { font-size: 1.1rem; margin: 0 0 12px; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    li:first-child { border-top: none; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .btn {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+    .btn:hover { text-decoration: none; opacity: 0.9; }
+    .meta { color: var(--muted); font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Plataformas-</h1>
+    <p class="lead">Juego de plataformas. Página con los archivos del repositorio y descarga completa en ZIP.</p>
+
+    <section class="card">
+      <h2>Descarga</h2>
+      <p>
+        <a class="btn" href="plataformas-repo.zip" download>Descargar plataformas-repo.zip</a>
+      </p>
+      <p class="meta">Contiene todos los archivos del repositorio en la rama <code>ccr-efcd13d2-220kx7</code>.</p>
+    </section>
+
+    <section class="card">
+      <h2>Archivos del repositorio</h2>
+      <ul>
+        <li>
+          <a href="README.md"><code>README.md</code></a>
+          <span class="meta">Descripción del proyecto</span>
+        </li>
+        <li>
+          <a href="index.html"><code>index.html</code></a>
+          <span class="meta">Esta página</span>
+        </li>
+        <li>
+          <a href="plataformas-repo.zip"><code>plataformas-repo.zip</code></a>
+          <span class="meta">Archivo ZIP con todos los archivos</span>
+        </li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
