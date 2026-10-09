@@ -709,6 +709,80 @@
             return malla;
         }
 
+        // ⚡ Colinas de fondo: la misma hierba y tierra que las plataformas, detrás del nivel
+        function alturaColinaFondo(x, z) {
+            return 2 + 2.2 * Math.sin(x * 0.0125 + 0.9) + 1.2 * Math.sin(x * 0.031 + 2.3)
+                + 0.7 * Math.sin(x * 0.077 + 0.4) + 0.6 * Math.sin(z * 0.21 + x * 0.006);
+        }
+        let colinasFondo = null, frentesFondo = [];
+        function crearColinasFondo(xIni, xFin) {
+            const pasoX = 4, zFrente = -8, zFondo = -20, pasosZ = 4, franja = 8;
+            const nX = Math.ceil((xFin - xIni) / pasoX);
+            const pos = [], uv = [], col = [], indTop = [], indFrente = [];
+            // superficie superior: hierba
+            for (let i = 0; i <= nX; i++) {
+                const x = xIni + i * pasoX;
+                for (let j = 0; j <= pasosZ; j++) {
+                    const z = zFrente + (zFondo - zFrente) * j / pasosZ;
+                    pos.push(x, alturaColinaFondo(x, z), z);
+                    uv.push(x / 4, z / 4);
+                    col.push(1, 1, 1, 1);
+                }
+            }
+            const fila = pasosZ + 1;
+            for (let i = 0; i < nX; i++) {
+                for (let j = 0; j < pasosZ; j++) {
+                    const a = i * fila + j, b = a + fila, c = a + 1, d = b + 1;
+                    indTop.push(a, b, c, c, b, d);
+                }
+            }
+            // cara frontal: hierba que se desvanece hacia el fondo
+            const inicio = pos.length / 3;
+            for (let i = 0; i <= nX; i++) {
+                const x = xIni + i * pasoX, h = alturaColinaFondo(x, zFrente);
+                pos.push(x, h, zFrente, x, h - franja, zFrente);
+                uv.push(x / 4, 0, x / 4, franja / 4);
+                col.push(1, 1, 1, 1, 1, 1, 1, 0);
+            }
+            for (let i = 0; i < nX; i++) {
+                const a = inicio + i * 2;
+                indFrente.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
+            geo.setIndex(indTop.concat(indFrente));
+            geo.addGroup(0, indTop.length, 0);
+            geo.addGroup(indTop.length, indFrente.length, 1);
+            geo.computeVertexNormals();
+            frentesFondo = matFases.map(f => { const m = f.top.clone(); m.vertexColors = true; m.transparent = true; return m; });
+            const malla = new THREE.Mesh(geo, [matFases[0].top, frentesFondo[0]]);
+            malla.receiveShadow = true;
+            scene.add(malla);
+            return malla;
+        }
+        // Mechones de hierba sobre las colinas, con los mismos modelos y materiales que las plataformas
+        function plantarHierbaColinas(xIni, xFin) {
+            const porMaterial = 600;
+            const mundo = new THREE.Object3D();
+            matMatojos.forEach((mat) => {
+                const malla = new THREE.InstancedMesh(geoMatojo, mat, porMaterial);
+                for (let k = 0; k < porMaterial; k++) {
+                    const x = xIni + Math.random() * (xFin - xIni);
+                    const z = -9 - Math.random() * 10;
+                    const ancho = 0.05 + Math.random() * 0.07, alto = 0.25 + Math.random() * 0.5;
+                    mundo.position.set(x, alturaColinaFondo(x, z) + alto / 2 - 0.1, z);
+                    mundo.rotation.set((Math.random() - 0.5) * 0.4, Math.random() * Math.PI, (Math.random() - 0.5) * 0.4);
+                    mundo.scale.set(ancho, alto, ancho);
+                    mundo.updateMatrix();
+                    malla.setMatrixAt(k, mundo.matrix);
+                }
+                malla.instanceMatrix.needsUpdate = true;
+                scene.add(malla);
+            });
+        }
+
         function clonarYTintar(assetName, fData) {
             if(!mCargados[assetName]) return null;
             let clone = mCargados[assetName].clone();
@@ -1021,7 +1095,7 @@
                         
                         let mont = clonarYTintar(montanaKey, fData); 
                         if(mont) { 
-                            colocarMontana(mont, montanaKey, cx + gap/2, cy, -16);
+                            colocarMontana(mont, montanaKey, cx + gap/2, alturaColinaFondo(cx + gap/2, -16), -16);
                             
                             let luzCanyon = new THREE.PointLight(fData.aguaColor, 25, 70);
                             luzCanyon.position.set(0, 12, 2);
@@ -1171,6 +1245,7 @@
                 cx += 40; 
                 if (f < configFases.length - 1) { crearTerrenoOndulado(cx, 20, cy, f, fData, true); cx += 20; }
             }
+            if (!colinasFondo) { colinasFondo = crearColinasFondo(-60, cx + 60); plantarHierbaColinas(-60, cx + 60); }
         }
 
         function colocarBloque() {
@@ -1206,6 +1281,7 @@
             scene.background = crearCieloGradient(configFases[index].skyC); 
             scene.fog.color.setHex(configFases[index].fog);
             if (cordillera) cordillera.material.color.set(new THREE.Color(configFases[index].fog).lerp(new THREE.Color(0x4a3c7a), 0.7));
+            if (colinasFondo) colinasFondo.material = [matFases[index].top, frentesFondo[index]];
             dirLight.color.setHex(configFases[index].aguaColor);
             let alertEl = document.getElementById('phase-alert'); 
             alertEl.innerText = configFases[index].nombre; 
