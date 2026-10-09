@@ -14,7 +14,7 @@ Abre `plataformas_nuevo.html` en el navegador (necesita conexión para cargar th
 - F: pescar (solo Miguel)
 - P / Esc: pausa (se pausa sola al cambiar de pestaña)
 
-**Pantalla táctil**: botones en pantalla, arrastrar para girar la cámara, rueda o pellizco para el zoom.
+**Pantalla táctil**: gira la ruleta de la izquierda para avanzar (cuanto más giras, más rápido; al soltarla vuelve al centro), botones para saltar y actuar, arrastrar para girar la cámara, rueda o pellizco para el zoom.
 
 ## Optimizar modelos
 

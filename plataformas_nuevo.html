@@ -20,6 +20,12 @@
         .btn { width: 75px; height: 75px; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.5); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 32px; backdrop-filter: blur(10px); color: #FFF; transition: all 0.1s; }
         .btn:active { transform: scale(0.85); background: rgba(255, 255, 255, 0.4); }
         .btn-action { background: rgba(255, 153, 0, 0.3); border-color: #ffcc00; }
+        #ruleta { position: relative; width: 132px; height: 132px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(0,0,0,0.3) 58%, rgba(255,255,255,0.14) 60%); border: 2px solid rgba(255,255,255,0.45); backdrop-filter: blur(6px); pointer-events: auto; touch-action: none; user-select: none; }
+        #ruleta-disco { width: 88px; height: 88px; border-radius: 50%; background: repeating-conic-gradient(rgba(255,255,255,0.35) 0deg 4deg, rgba(255,255,255,0.08) 4deg 18deg); border: 3px solid rgba(255,204,0,0.85); position: relative; transition: transform 0.08s linear; }
+        #ruleta-disco::before { content: ''; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); border: 7px solid transparent; border-top: 0; border-bottom: 10px solid #ffcc00; }
+        #ruleta .flecha { position: absolute; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.85); font-size: 18px; pointer-events: none; }
+        #ruleta .izq { left: 10px; }
+        #ruleta .der { right: 10px; }
         #btnFish { display: none; background: rgba(0, 153, 255, 0.3); border-color: #00aaff; }
         #btnJump { width: 95px; height: 95px; font-size: 42px; border-width: 3px; }
         #phase-alert { position: absolute; top: 25%; left: 0; width: 100%; text-align: center; color: white; font-size: 55px; font-weight: 900; text-transform: uppercase; letter-spacing: 8px; text-shadow: 0 0 40px rgba(0,0,0,1); opacity: 0; transition: opacity 1s; z-index: 20; pointer-events: none; }
@@ -73,7 +79,7 @@
         </div>
         <div id="pause-screen"><h1>PAUSA</h1><p style="font-size: 20px;">Pulsa P o Esc para continuar</p></div>
         <div id="controls">
-            <div class="pad"><div class="btn" id="btnLeft">⬅️</div><div class="btn" id="btnRight">➡️</div></div>
+            <div class="pad"><div id="ruleta" aria-label="Ruleta de dirección"><span class="flecha izq">◀</span><div id="ruleta-disco"></div><span class="flecha der">▶</span></div></div>
             <div class="pad">
                 <div class="btn" id="btnFish">🎣</div>
                 <div class="btn btn-build" id="btnBuild">🧱</div>
@@ -84,7 +90,7 @@
         </div>
         <div id="menu" class="menu-overlay">
             <h1>HÉROES <span>MÁRQUEZ</span></h1>
-            <p class="ayuda"><b>Teclado:</b> ← → / A D mover · ↑ / W / Espacio saltar · Z / J disparar · Shift / X esquivar · B / E bloque · F pescar (Miguel) · P / Esc pausa<br><b>Pantalla táctil:</b> botones en pantalla · arrastra para girar la cámara · rueda o pellizco para el zoom</p>
+            <p class="ayuda"><b>Teclado:</b> ← → / A D mover · ↑ / W / Espacio saltar · Z / J disparar · Shift / X esquivar · B / E bloque · F pescar (Miguel) · P / Esc pausa<br><b>Pantalla táctil:</b> gira la ruleta para avanzar (cuanto más giras, más rápido) · botones para saltar y actuar · arrastra para girar la cámara · pellizco para el zoom</p>
             <div id="btn-group" style="display:none;">
                 <button class="char-btn" style="width: 100%; background: #3498db; border-color: #2980b9; justify-content: center;" onclick="toggleFullScreen()">
                     <span>🔲 PANTALLA COMPLETA</span>
@@ -151,12 +157,12 @@
         let cameraOffsetY = 0, cameraYaw = 0, isDraggingCam = false, prevCamX = 0, prevCamY = 0;
 
         document.addEventListener('touchstart', (e) => {
-            if(e.target.closest('.btn') || e.target.closest('.char-btn') || e.target.closest('#btn-continue')) return;
+            if(e.target.closest('.btn') || e.target.closest('.char-btn') || e.target.closest('#btn-continue') || e.target.closest('#ruleta')) return;
             if(e.touches.length === 2) { initialPinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); initialZoom = cameraZoom; isDraggingCam = false; }
             else if (e.touches.length === 1) { isDraggingCam = true; prevCamX = e.touches[0].clientX; prevCamY = e.touches[0].clientY; }
         }, {passive: false});
         document.addEventListener('touchmove', (e) => {
-            if(e.target.closest('.btn') || e.target.closest('.char-btn') || e.target.closest('#btn-continue')) return;
+            if(e.target.closest('.btn') || e.target.closest('.char-btn') || e.target.closest('#btn-continue') || e.target.closest('#ruleta')) return;
             if(e.touches.length === 2 && initialPinchDist) { e.preventDefault(); let currentDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); let scale = initialPinchDist / currentDist; cameraZoom = Math.max(minZoom, Math.min(maxZoom, initialZoom * scale)); }
             else if(e.touches.length === 1 && isDraggingCam) { 
                 e.preventDefault(); 
@@ -170,7 +176,7 @@
             }
         }, {passive: false});
         document.addEventListener('touchend', (e) => { if(e.touches.length < 2) initialPinchDist = null; if(e.touches.length < 1) isDraggingCam = false; });
-        document.addEventListener('mousedown', (e) => { if(e.target.closest('.btn') || e.target.closest('.char-btn') || e.target.closest('#btn-continue')) return; isDraggingCam = true; prevCamX = e.clientX; prevCamY = e.clientY; });
+        document.addEventListener('mousedown', (e) => { if(e.target.closest('.btn') || e.target.closest('.char-btn') || e.target.closest('#btn-continue') || e.target.closest('#ruleta')) return; isDraggingCam = true; prevCamX = e.clientX; prevCamY = e.clientY; });
         document.addEventListener('mousemove', (e) => { if(isDraggingCam) { let deltaX = e.clientX - prevCamX; let deltaY = e.clientY - prevCamY; cameraYaw -= deltaX * 0.008; cameraOffsetY += deltaY * 0.08; cameraOffsetY = Math.max(-12, Math.min(22, cameraOffsetY)); prevCamX = e.clientX; prevCamY = e.clientY; } });
         document.addEventListener('mouseup', () => { isDraggingCam = false; });
         window.addEventListener('wheel', (e) => { cameraZoom += e.deltaY * 0.02; cameraZoom = Math.max(minZoom, Math.min(maxZoom, cameraZoom)); });
@@ -286,7 +292,7 @@
 
         const keys = { left:false, right:false, jump:false, action:false, build:false, fish:false, dash:false };
         const setupBtn = (id, k) => { let el = document.getElementById(id); const p = (e)=>{e.preventDefault(); keys[k]=true; initAudio();}; const r = (e)=>{e.preventDefault(); keys[k]=false;}; el.addEventListener('touchstart', p, {passive:false}); el.addEventListener('touchend', r, {passive:false}); el.addEventListener('mousedown', p); el.addEventListener('mouseup', r); el.addEventListener('mouseleave', r); };
-        setupBtn('btnLeft', 'left'); setupBtn('btnRight', 'right'); setupBtn('btnJump', 'jump'); setupBtn('btnAction', 'action'); setupBtn('btnFish', 'fish'); setupBtn('btnDash', 'dash');
+        setupBtn('btnJump', 'jump'); setupBtn('btnAction', 'action'); setupBtn('btnFish', 'fish'); setupBtn('btnDash', 'dash');
         document.getElementById('btnBuild').addEventListener('mousedown', colocarBloque);
         document.getElementById('btnBuild').addEventListener('touchstart', colocarBloque);
 
@@ -307,8 +313,35 @@
             initAudio();
         });
         window.addEventListener('keyup', (e) => { const accion = MAPA_TECLAS[e.code]; if (accion) keys[accion] = false; });
-        window.addEventListener('blur', () => { for (const accion in keys) keys[accion] = false; });
+        window.addEventListener('blur', () => { for (const accion in keys) keys[accion] = false; soltarRuleta(); });
         document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'playing') alternarPausa(); });
+
+        // --- RULETA DE DIRECCIÓN: gira el volante para avanzar; al soltarlo vuelve al centro ---
+        const ruleta = document.getElementById('ruleta');
+        const disco = document.getElementById('ruleta-disco');
+        const GIRO_MAX = 70; // grados de giro máximo (= velocidad máxima)
+        let ruletaValor = 0, ruletaActiva = false, ruletaPuntero = null;
+        function apuntarRuleta(e) {
+            const r = ruleta.getBoundingClientRect();
+            const ang = Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2))) * 180 / Math.PI;
+            const grados = Math.max(-GIRO_MAX, Math.min(GIRO_MAX, ang));
+            ruletaValor = grados / GIRO_MAX;
+            disco.style.transform = `rotate(${grados}deg)`;
+        }
+        function soltarRuleta() {
+            ruletaActiva = false; ruletaPuntero = null; ruletaValor = 0;
+            disco.style.transform = 'rotate(0deg)';
+        }
+        ruleta.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            ruletaActiva = true; ruletaPuntero = e.pointerId;
+            ruleta.setPointerCapture(e.pointerId);
+            initAudio();
+            apuntarRuleta(e);
+        });
+        ruleta.addEventListener('pointermove', (e) => { if (ruletaActiva && e.pointerId === ruletaPuntero) apuntarRuleta(e); });
+        ruleta.addEventListener('pointerup', (e) => { if (e.pointerId === ruletaPuntero) soltarRuleta(); });
+        ruleta.addEventListener('pointercancel', (e) => { if (e.pointerId === ruletaPuntero) soltarRuleta(); });
 
         const geoParticula = new THREE.BoxGeometry(0.15, 0.15, 0.15); const cacheMatParticulas = {};
         function getMatParticula(hex) { if(!cacheMatParticulas[hex]) cacheMatParticulas[hex] = new THREE.MeshBasicMaterial({color: hex}); return cacheMatParticulas[hex]; }
@@ -783,6 +816,79 @@
             });
         }
 
+        // ⚡ Lago 3D: cuenca con profundidad, superficie que ondula y espuma en el borde
+        const lagosAnimados = [];
+        let tiempoAgua = 0;
+        function crearLagoTresD(x, y, z, ancho, fData) {
+            const prof = 9;
+            const grupo = new THREE.Group();
+            grupo.position.set(x, y, z);
+            // cuenca: el fondo se hunde hacia el centro
+            const geoCuenca = new THREE.PlaneGeometry(ancho, prof, 14, 6);
+            const pc = geoCuenca.attributes.position;
+            for (let i = 0; i < pc.count; i++) {
+                const u = pc.getX(i) / (ancho / 2), v = pc.getY(i) / (prof / 2);
+                pc.setZ(i, -2.2 * Math.max(0, 1 - (u * u + v * v) * 0.6));
+            }
+            geoCuenca.computeVertexNormals();
+            const cuenca = new THREE.Mesh(geoCuenca, new THREE.MeshStandardMaterial({ color: new THREE.Color(fData.aguaColor).multiplyScalar(0.4), roughness: 0.9 }));
+            cuenca.rotation.x = -Math.PI / 2;
+            cuenca.position.y = -0.15;
+            grupo.add(cuenca);
+            // superficie: ondula y deja ver el fondo
+            const geoAgua = new THREE.PlaneGeometry(ancho, prof, 24, 8);
+            const baseAgua = geoAgua.attributes.position.array.slice();
+            const superficie = new THREE.Mesh(geoAgua, new THREE.MeshStandardMaterial({ color: fData.aguaColor, emissive: fData.aguaGlow, emissiveIntensity: 0.35, map: texAgua, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.8, depthWrite: false }));
+            superficie.rotation.x = -Math.PI / 2;
+            grupo.add(superficie);
+            // espuma en el borde
+            const espuma = [];
+            const tiras = [[0, prof / 2, ancho, 0.4], [0, -prof / 2, ancho, 0.4], [ancho / 2, 0, 0.4, prof], [-ancho / 2, 0, 0.4, prof]];
+            for (const [px, pz, sx, sz] of tiras) {
+                const m = new THREE.Mesh(new THREE.PlaneGeometry(sx, sz), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }));
+                m.rotation.x = -Math.PI / 2;
+                m.position.set(px, 0.14, pz);
+                grupo.add(m);
+                espuma.push(m);
+            }
+            registrarEntorno(grupo, null, x);
+            lagosAnimados.push({ grupo, superficie, baseAgua, espuma, fase: Math.random() * 6 });
+            return grupo;
+        }
+        function actualizarLagos() {
+            tiempoAgua += GAME_SPEED / 60;
+            for (const l of lagosAnimados) {
+                if (!l.grupo.parent) continue;
+                const pos = l.superficie.geometry.attributes.position;
+                for (let i = 0; i < pos.count; i++) {
+                    const x = l.baseAgua[i * 3], y = l.baseAgua[i * 3 + 1];
+                    pos.setZ(i, 0.1 * Math.sin(x * 1.1 + tiempoAgua * 1.7 + l.fase) + 0.05 * Math.sin(y * 2.3 - tiempoAgua * 1.2));
+                }
+                pos.needsUpdate = true;
+                l.superficie.geometry.computeVertexNormals();
+                const pulso = 0.4 + 0.2 * Math.sin(tiempoAgua * 2 + l.fase);
+                for (const m of l.espuma) m.material.opacity = pulso;
+            }
+        }
+
+        // Cascada con volumen: una segunda capa de agua por fuera de la cinta del río
+        const cacheGeoRio = {}, cacheMatRio = [];
+        function crearCapaRio(rio, clave, fData) {
+            if (!cacheGeoRio[clave]) {
+                const g = rio.geometry.clone();
+                if (!g.attributes.normal) g.computeVertexNormals();
+                const p = g.attributes.position, n = g.attributes.normal;
+                for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) + n.getX(i) * 0.3, p.getY(i) + n.getY(i) * 0.3, p.getZ(i) + n.getZ(i) * 0.3);
+                g.computeBoundingSphere();
+                cacheGeoRio[clave] = g;
+            }
+            const fase = configFases.indexOf(fData);
+            if (!cacheMatRio[fase]) cacheMatRio[fase] = new THREE.MeshStandardMaterial({ color: fData.aguaColor, emissive: fData.aguaGlow, emissiveIntensity: 0.25, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide, roughness: 0.2 });
+            const capa = new THREE.Mesh(cacheGeoRio[clave], cacheMatRio[fase]);
+            capa.renderOrder = 4;
+            return capa;
+        }
+
         function clonarYTintar(assetName, fData) {
             if(!mCargados[assetName]) return null;
             let clone = mCargados[assetName].clone();
@@ -800,6 +906,7 @@
             }
             // ⚡ Las montañas animan su río y su espuma
             if (assetName.startsWith('montana_')) {
+                const extrasRio = [];
                 clone.traverse(c => {
                     if (!c.isMesh) return;
 
@@ -826,6 +933,7 @@
                         });
                         c.renderOrder = 3;
                         riosAnimados.push(c);
+                        extrasRio.push(c);
 
                     } else if (c.name === 'poza_agua') {
                         c.visible = false;
@@ -856,6 +964,7 @@
                         c.material = materialTintado(c.material, fData, 0.3);
                     }
                 });
+                extrasRio.forEach(c => c.add(crearCapaRio(c, assetName, fData)));
             }
             return clone;
         }
@@ -1104,10 +1213,7 @@
                             registrarEntorno(mont, null, cx + gap/2); 
                         } 
                         
-                        let lago = new THREE.Mesh(new THREE.PlaneGeometry(anchoLago + 4, 20), new THREE.MeshBasicMaterial({ map: texAgua, transparent: true, opacity: 0.85, color: fData.aguaColor, depthWrite: false })); 
-                        lago.rotation.x = -Math.PI / 2; 
-                        lago.position.set(cx + gap/2, cy - 2.5, -2); 
-                        registrarEntorno(lago, null, cx + gap/2); 
+                        crearLagoTresD(cx + gap/2, cy - 2.5, -2, anchoLago + 4, fData);
 
                         // ⚡ Efectos animados de agua (niebla, burbujas, salpicaduras)
                         // Se colocan ligeramente por encima del lago para que las
@@ -1443,17 +1549,20 @@
 
             // ⚡ Niebla / burbujas / salpicaduras en las pozas y cascadas
             actualizarEfectosAgua();
+            actualizarLagos();
 
             if(phys.invuln > 0) { phys.invuln -= GAME_SPEED; playerWrapper.visible = (Math.floor(Date.now()/100)%2===0); } else playerWrapper.visible = true;
             if(fishingCooldown > 0) fishingCooldown -= GAME_SPEED;
 
             // Izquierda/derecha según la pantalla: con la cámara girada, "derecha" sigue siendo la derecha de la pantalla
             const sentidoPantalla = Math.cos(cameraYaw) >= 0 ? 1 : -1;
-            const entradaX = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+            // La ruleta marca también la intensidad; el teclado da siempre 1 o -1
+            const ruletaMov = Math.abs(ruletaValor) > 0.08 ? ruletaValor : 0;
+            const entradaX = ruletaMov !== 0 ? ruletaMov : (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
             let targetVx = 0;
             if (entradaX !== 0) {
-                const sentido = entradaX * sentidoPantalla;
-                targetVx = sentido * pStats.speed * 40;
+                const sentido = Math.sign(entradaX) * sentidoPantalla;
+                targetVx = sentido * pStats.speed * 40 * Math.min(1, Math.abs(entradaX));
                 phys.dir = sentido;
                 playerWrapper.rotation.y = sentido > 0 ? Math.PI / 2 : -Math.PI / 2;
                 // Mientras el héroe avanza, la cámara vuelve poco a poco a la vista lateral
