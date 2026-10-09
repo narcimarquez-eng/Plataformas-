@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Héroes Márquez - IA de Jefes Finales</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, sans-serif; user-select: none; touch-action: none; }
+        canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: none; }
+        #top-bar { padding: 15px 25px; display: flex; justify-content: space-between; align-items: flex-start; color: white; font-size: 20px; font-weight: 900; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
+        .panel-info { background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(20, 20, 20, 0.6)); padding: 12px 24px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.2); backdrop-filter: blur(8px); }
+        #ui-player { color: #ffcc00; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; }
+        #ui-lives { font-size: 22px; margin-top: 5px; display: block; }
+        #score-display { color: #FFD700; margin-bottom: 8px; font-size: 24px; }
+        #block-display { color: #FFA07A; background: rgba(0,0,0,0.5); padding: 5px 12px; border-radius: 6px; display: inline-block; }
+        #controls { position: absolute; bottom: 20px; left: 0; width: 100%; padding: 0 20px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; pointer-events: none; display: none; z-index: 15; }
+        .pad { display: flex; gap: 12px; pointer-events: auto; align-items: center; }
+        .btn { width: 75px; height: 75px; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.5); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 32px; backdrop-filter: blur(10px); color: #FFF; transition: all 0.1s; }
+        .btn:active { transform: scale(0.85); background: rgba(255, 255, 255, 0.4); }
+        .btn-action { background: rgba(255, 153, 0, 0.3); border-color: #ffcc00; }
+        #btnFish { display: none; background: rgba(0, 153, 255, 0.3); border-color: #00aaff; }
+        #btnJump { width: 95px; height: 95px; font-size: 42px; border-width: 3px; }
+        #phase-alert { position: absolute; top: 25%; left: 0; width: 100%; text-align: center; color: white; font-size: 55px; font-weight: 900; text-transform: uppercase; letter-spacing: 8px; text-shadow: 0 0 40px rgba(0,0,0,1); opacity: 0; transition: opacity 1s; z-index: 20; pointer-events: none; }
+        #combo-alert { position: absolute; top: 38%; left: 0; width: 100%; text-align: center; color: #ffcc00; font-size: 34px; font-weight: 900; text-shadow: 0 0 20px rgba(0,0,0,1), 0 0 10px #ff6600; opacity: 0; transform: scale(0.7); transition: opacity 0.15s, transform 0.15s; z-index: 20; pointer-events: none; }
+        #combo-alert.show { opacity: 1; transform: scale(1.1); }
+        #ui-gemas { color: #66ddff; font-size: 20px; margin-top: 4px; }
+        @keyframes shakeCam { 0%,100%{ transform: translate(0,0); } 25%{ transform: translate(-4px,3px); } 50%{ transform: translate(4px,-3px); } 75%{ transform: translate(-3px,-4px); } }
+        .shake { animation: shakeCam 0.25s linear; }
+        #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 50; color: white; pointer-events: auto; }
+        #game-over-screen h1 { font-size: 60px; color: #ff0055; margin-bottom: 10px; }
+        #btn-continue { background: #ffcc00; color: #000; border: none; padding: 15px 40px; font-size: 24px; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 30px; transition: transform 0.1s; }
+        #btn-continue:active { transform: scale(0.9); }
+        .menu-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #2a1b4e 0%, #0d0614 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 30; overflow-y: auto; padding: 20px; box-sizing: border-box; }
+        h1 { color: #FFF; font-size: 45px; margin-bottom: 20px; text-align: center; text-shadow: 0 0 20px #ffcc00; }
+        h1 span { color: #ffcc00; }
+        #btn-group { width: 100%; max-width: 450px; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; }
+        .char-btn { background: rgba(20, 15, 30, 0.9); border: 2px solid #ffcc00; padding: 15px 30px; font-size: 22px; font-weight: bold; color: white; border-radius: 12px; cursor: pointer; width: 100%; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
+        .char-btn:hover { background: #ffcc00; color: #000; }
+        #progress-bar { width: 300px; height: 6px; background: #222; border-radius: 3px; overflow: hidden; margin-top: 15px;}
+        #progress-fill { width: 0%; height: 100%; background: #ffcc00; transition: width 0.3s; }
+        @media (max-height: 500px) { h1 { font-size: 28px; margin-bottom: 10px; } #btn-group { flex-direction: row; flex-wrap: wrap; max-width: 600px; gap: 8px; } .char-btn { width: 48%; padding: 8px 15px; font-size: 16px; margin: 0; } }
+    </style>
+    <script type="importmap">
+      { "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+          "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+        } }
+    </script>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui-layer">
+            <div id="top-bar">
+                <div class="panel-info"><div id="ui-player">Héroe</div><div id="ui-lives">❤️❤️❤️❤️❤️</div></div>
+                <div class="panel-info" style="text-align: right;"><div id="score-display">PUNTOS: 0</div><div id="block-display">🧱 BLOQUES: 0</div><div id="ui-gemas">💎 GEMAS: 0</div></div>
+            </div>
+            <div id="phase-alert">FASE 1</div>
+            <div id="combo-alert">¡ACÉRCATE A UN BORDE!</div>
+        </div>
+        <div id="game-over-screen">
+            <h1>HAS CAÍDO</h1>
+            <p style="font-size: 20px;" id="go-desc">Regresarás al último banderín.</p>
+            <button id="btn-continue" onclick="continuarDesdeFase()">REAPARECER</button>
+        </div>
+        <div id="controls">
+            <div class="pad"><div class="btn" id="btnLeft">⬅️</div><div class="btn" id="btnRight">➡️</div></div>
+            <div class="pad">
+                <div class="btn" id="btnFish">🎣</div>
+                <div class="btn btn-build" id="btnBuild">🧱</div>
+                <div class="btn" id="btnDash" style="background: rgba(0, 255, 150, 0.25); border-color: #00ffaa;">💨</div>
+                <div class="btn btn-action" id="btnAction">✨</div>
+                <div class="btn" id="btnJump">⬆️</div>
+            </div>
+        </div>
+        <div id="menu" class="menu-overlay">
+            <h1>HÉROES <span>MÁRQUEZ</span></h1>
+            <div id="btn-group" style="display:none;">
+                <button class="char-btn" style="width: 100%; background: #3498db; border-color: #2980b9; justify-content: center;" onclick="toggleFullScreen()">
+                    <span>🔲 PANTALLA COMPLETA</span>
+                </button>
+                <button class="char-btn" onclick="iniciarJuego('manuel', '🧸')"><span>👦🏽 Manuel (Daño x3 / Boomerang)</span> <span>🧸</span></button>
+                <button class="char-btn" onclick="iniciarJuego('carlos', '🏎️')"><span>👦🏼 Carlos (Salto +30%)</span> <span>🏎️</span></button>
+                <button class="char-btn" onclick="iniciarJuego('narci', '🍕')"><span>🧔🏻‍♂️ Narci (Doble Salto)</span> <span>🍕</span></button>
+                <button class="char-btn" onclick="iniciarJuego('miguel', '🐟')"><span>🧑🏻 Miguel (Rangox2)</span> <span>🐟</span></button>
+            </div>
+            <div id="loading-container">
+                <div style="color: #ffcc00; font-size: 20px; font-weight: bold;">CREANDO EL MUNDO...</div>
+                <div id="progress-bar"><div id="progress-fill"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import * as CANNON from 'cannon-es';
+
+        window.toggleFullScreen = function() {
+            if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => {}); }
+            else { if (document.exitFullscreen) document.exitFullscreen(); }
+        };
+
+        // --- AUDIO ---
+        let audioCtx; let bgmInterval; let noteIdx = 0;
+        const bgmNotes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63];
+        function initAudio() {
+            if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+        }
+        function playSound(type) {
+            if(!audioCtx || audioCtx.state !== 'running') return;
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            let now = audioCtx.currentTime;
+            if(type === 'jump') { osc.type = 'sine'; osc.frequency.setValueAtTime(300, now); osc.frequency.exponentialRampToValueAtTime(600, now+0.1); gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now+0.1); osc.start(now); osc.stop(now+0.1); }
+            else if(type === 'coin') { osc.type = 'sine'; osc.frequency.setValueAtTime(800, now); osc.frequency.setValueAtTime(1200, now+0.1); gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now+0.2); osc.start(now); osc.stop(now+0.2); }
+            else if(type === 'shoot') { osc.type = 'square'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(100, now+0.1); gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now+0.1); osc.start(now); osc.stop(now+0.1); }
+            else if(type === 'dash') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(30, now+0.2); gain.gain.setValueAtTime(0.15, now); gain.gain.exponentialRampToValueAtTime(0.01, now+0.2); osc.start(now); osc.stop(now+0.2); }
+            else if(type === 'hurt') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, now); osc.frequency.exponentialRampToValueAtTime(50, now+0.3); gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now+0.3); osc.start(now); osc.stop(now+0.3); }
+            else if(type === 'splash') { osc.type = 'triangle'; osc.frequency.setValueAtTime(100, now); osc.frequency.exponentialRampToValueAtTime(300, now+0.2); gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now+0.2); osc.start(now); osc.stop(now+0.2); }
+            else if(type === 'hit') { osc.type = 'square'; osc.frequency.setValueAtTime(100, now); osc.frequency.setValueAtTime(50, now+0.1); gain.gain.setValueAtTime(0.15, now); gain.gain.exponentialRampToValueAtTime(0.01, now+0.1); osc.start(now); osc.stop(now+0.1); }
+        }
+        function playMusic() {
+            if(bgmInterval) clearInterval(bgmInterval);
+            bgmInterval = setInterval(() => {
+                if(gameState !== 'playing' || !audioCtx) return;
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.type = 'sine'; osc.frequency.value = bgmNotes[noteIdx] * (faseActual % 2 === 0 ? 1 : 1.2);
+                noteIdx = (noteIdx + 1) % bgmNotes.length;
+                let now = audioCtx.currentTime;
+                gain.gain.setValueAtTime(0.03, now); gain.gain.exponentialRampToValueAtTime(0.001, now+0.25);
+                osc.start(now); osc.stop(now+0.25);
+            }, 350);
+        }
+
+        // --- CÁMARA TÁCTIL / RATÓN (GIRO 360°) ---
+        let cameraZoom = 17, minZoom = 6, maxZoom = 32;
+        let initialPinchDist = null, initialZoom = cameraZoom;
+        let cameraOffsetY = 0, cameraYaw = 0, isDraggingCam = false, prevCamX = 0, prevCamY = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            if(e.target.closest('.btn') || e.target.closest('.char-btn') || e.target.closest('#btn-continue')) return;
+            if(e.touches.length === 2) { initialPinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); initialZoom = cameraZoom; isDraggingCam = false; }
+            else if (e.touches.length === 1) { isDraggingCam = true; prevCamX = e.touches[0].clientX; prevCamY = e.touches[0].clientY; }
+        }, {passive: false});
+        document.addEventListener('touchmove', (e) => {
+            if(e.target.closest('.btn') || e.target.closest('.char-btn') || e.target.closest('#btn-continue')) return;
+            if(e.touches.length === 2 && initialPinchDist) { e.preventDefault(); let currentDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); let scale = initialPinchDist / currentDist; cameraZoom = Math.max(minZoom, Math.min(maxZoom, initialZoom * scale)); }
+            else if(e.touches.length === 1 && isDraggingCam) { 
+                e.preventDefault(); 
+                let deltaX = e.touches[0].clientX - prevCamX; 
+                let deltaY = e.touches[0].clientY - prevCamY; 
+                cameraYaw -= deltaX * 0.008;
+                cameraOffsetY += deltaY * 0.08; 
+                cameraOffsetY = Math.max(-12, Math.min(22, cameraOffsetY)); 
+                prevCamX = e.touches[0].clientX;
+                prevCamY = e.touches[0].clientY; 
+            }
+        }, {passive: false});
+        document.addEventListener('touchend', (e) => { if(e.touches.length < 2) initialPinchDist = null; if(e.touches.length < 1) isDraggingCam = false; });
+        document.addEventListener('mousedown', (e) => { if(e.target.closest('.btn') || e.target.closest('.char-btn') || e.target.closest('#btn-continue')) return; isDraggingCam = true; prevCamX = e.clientX; prevCamY = e.clientY; });
+        document.addEventListener('mousemove', (e) => { if(isDraggingCam) { let deltaX = e.clientX - prevCamX; let deltaY = e.clientY - prevCamY; cameraYaw -= deltaX * 0.008; cameraOffsetY += deltaY * 0.08; cameraOffsetY = Math.max(-12, Math.min(22, cameraOffsetY)); prevCamX = e.clientX; prevCamY = e.clientY; } });
+        document.addEventListener('mouseup', () => { isDraggingCam = false; });
+        window.addEventListener('wheel', (e) => { cameraZoom += e.deltaY * 0.02; cameraZoom = Math.max(minZoom, Math.min(maxZoom, cameraZoom)); });
+
+        const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -35, 0) });
+        world.broadphase = new CANNON.SAPBroadphase(world);
+        const matFisicas = new CANNON.Material();
+        world.addContactMaterial(new CANNON.ContactMaterial(matFisicas, matFisicas, { friction: 0.0, restitution: 0.0 }));
+        let playerBody; let lastSafeX = 0, lastSafeY = 0;
+
+        const texLoader = new THREE.TextureLoader();
+        const texturas = {
+            hierba: texLoader.load('tex_hierba.jpg'), tierra: texLoader.load('tex_tierra.jpg'), arena: texLoader.load('tex_arena.jpg'), piedra_roja: texLoader.load('tex_piedra_roja.jpg'), nieve: texLoader.load('tex_nieve.jpg'), hielo: texLoader.load('tex_hielo.jpg'), magma: texLoader.load('tex_magma.jpg'), ceniza: texLoader.load('tex_ceniza.jpg'), musgo: texLoader.load('tex_musgo.jpg'), roca_oscura: texLoader.load('tex_roca_oscura.jpg')
+        };
+        Object.values(texturas).forEach(tex => { if(tex) { tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(2, 2); } });
+
+        // ⚡ Cada fase tiene un grupo de montañas compatibles con su bioma
+        // 1=Clásica, 2=Volcán, 3=Nevada, 4=Tropical, 5=Desierto, 6=Mágica, 7=Bosque Oscuro, 8=Helada, 9=Rocosa, 10=Dorada
+        const configFases = [
+            { nombre: "FASE 1", boss: 'basilisco_rey', skyC: ['#2a1b4e', '#f27832', '#ffda44'], fog: 0xf27832, aguaColor: 0x00ffff, aguaGlow: 0x0088ff, gapExtra: 0, cesped: 0x3a8b3a, montanas: [1, 7, 9] },
+            { nombre: "FASE 2", boss: 'manticora', skyC: ['#4a0e0e', '#c24141', '#ff9900'], fog: 0xc24141, aguaColor: 0xffcc88, aguaGlow: 0xff9900, gapExtra: 1, cesped: 0xa8925a, montanas: [5, 2, 9] },
+            { nombre: "FASE 3", boss: 'kraken_profundo', skyC: ['#112233', '#6688aa', '#ccffff'], fog: 0x99bbdd, aguaColor: 0x88ffff, aguaGlow: 0x00aaff, gapExtra: 2, cesped: 0xc8e0f0, montanas: [3, 8] },
+            { nombre: "FASE 4", boss: 'aguila_gigante', flyingBoss: true, skyC: ['#000000', '#220000', '#ff2200'], fog: 0x220000, aguaColor: 0xff5500, aguaGlow: 0xff0000, gapExtra: 3, cesped: 0x3a2a2a, montanas: [2, 9, 10] },
+            { nombre: "FASE 5", boss: 'mamut_ancestral', skyC: ['#051105', '#1a331a', '#44aa44'], fog: 0x112211, aguaColor: 0x55ff55, aguaGlow: 0x00ff00, gapExtra: 4, cesped: 0x2a5a2a, montanas: [4, 7, 6] },
+            { nombre: "FASE 6", boss: 'escorpion_abisal', skyC: ['#0a1f0a', '#1e3a1e', '#2e5a2e'], fog: 0x112b11, aguaColor: 0x33ff33, aguaGlow: 0x00aa00, gapExtra: 6, cesped: 0x1a4a1a, montanas: [7, 6, 9] },
+            { nombre: "FASE 7", boss: 'cerbero_3cabezas', skyC: ['#110022', '#330055', '#660099'], fog: 0x220033, aguaColor: 0xaa00ff, aguaGlow: 0x5500aa, gapExtra: 8, cesped: 0x3a2a4a, montanas: [6, 2, 7] },
+            { nombre: "FASE 8", boss: 'dragon_rojo', flyingBoss: true, skyC: ['#000005', '#050520', '#101050'], fog: 0x050515, aguaColor: 0x00ffff, aguaGlow: 0x0088ff, gapExtra: 11, cesped: 0x5a8aaa, montanas: [8, 10, 6] }
+        ];
+
+        const matFases = [
+            { top: new THREE.MeshStandardMaterial({ map: texturas.musgo, color: 0xFFFFFF }), bot: new THREE.MeshStandardMaterial({ map: texturas.tierra, color: 0xFFFFFF }) },
+            { top: new THREE.MeshStandardMaterial({ map: texturas.arena, color: 0xFFFFFF }), bot: new THREE.MeshStandardMaterial({ map: texturas.piedra_roja, color: 0xFFFFFF }) },
+            { top: new THREE.MeshStandardMaterial({ map: texturas.nieve, color: 0xFFFFFF }), bot: new THREE.MeshStandardMaterial({ map: texturas.hielo, color: 0xFFFFFF }) },
+            { top: new THREE.MeshStandardMaterial({ map: texturas.magma, color: 0xFFFFFF }), bot: new THREE.MeshStandardMaterial({ map: texturas.ceniza, color: 0xFFFFFF }) },
+            { top: new THREE.MeshStandardMaterial({ map: texturas.musgo, color: 0xFFFFFF }), bot: new THREE.MeshStandardMaterial({ map: texturas.roca_oscura, color: 0xFFFFFF }) },
+            { top: new THREE.MeshStandardMaterial({ map: texturas.musgo, color: 0x558833 }), bot: new THREE.MeshStandardMaterial({ map: texturas.tierra, color: 0x335522 }) },
+            { top: new THREE.MeshStandardMaterial({ map: texturas.roca_oscura, color: 0x443355 }), bot: new THREE.MeshStandardMaterial({ map: texturas.ceniza, color: 0x221133 }) },
+            { top: new THREE.MeshStandardMaterial({ map: texturas.hielo, color: 0x3388aa }), bot: new THREE.MeshStandardMaterial({ map: texturas.piedra_roja, color: 0x112244 }) }
+        ];
+
+        // ⚡ Materiales y geometrías compartidas para vegetación procedural
+        const matMatojos = [
+            new THREE.MeshStandardMaterial({ color: 0x2e8b57, roughness: 1.0, flatShading: true }),
+            new THREE.MeshStandardMaterial({ color: 0x3cb371, roughness: 1.0, flatShading: true }),
+            new THREE.MeshStandardMaterial({ color: 0x228b22, roughness: 1.0, flatShading: true }),
+            new THREE.MeshStandardMaterial({ color: 0x556b2f, roughness: 1.0, flatShading: true })
+        ];
+        const geoMatojo = new THREE.ConeGeometry(1, 1, 3);
+        const matFlor = [
+            new THREE.MeshStandardMaterial({ color: 0xff69b4, emissive: 0x330011, emissiveIntensity: 0.3 }),
+            new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0x332200, emissiveIntensity: 0.3 }),
+            new THREE.MeshStandardMaterial({ color: 0xff6347, emissive: 0x330000, emissiveIntensity: 0.3 })
+        ];
+        const geoTallo = new THREE.CylinderGeometry(0.02, 0.02, 0.4, 5);
+        const matTallo = new THREE.MeshStandardMaterial({ color: 0x228b22 });
+        const geoPetalo = new THREE.SphereGeometry(0.1, 6, 6);
+        const matBordeCespedBase = {};
+
+        function createTextTexture(text) { const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#FFF'; ctx.font = '80px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 64, 70); return new THREE.CanvasTexture(canvas); }
+        function crearTexturaAgua() { const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 512; const ctx = canvas.getContext('2d'); const grad = ctx.createLinearGradient(0,0,0,512); grad.addColorStop(0, '#FFFFFF'); grad.addColorStop(0.5, '#AAAAAA'); grad.addColorStop(1, '#FFFFFF'); ctx.fillStyle = grad; ctx.fillRect(0, 0, 128, 512); ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; for (let i = 0; i < 80; i++) ctx.fillRect(Math.random()*128, Math.random()*512, 2, 10 + Math.random()*50); const texture = new THREE.CanvasTexture(canvas); texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(2, 3); return texture; }
+        function crearCieloGradient(colors) { const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256; const ctx = canvas.getContext('2d'); const grad = ctx.createLinearGradient(0,0,0,256); grad.addColorStop(0, colors[0]); grad.addColorStop(0.5, colors[1]); grad.addColorStop(1, colors[2]); ctx.fillStyle = grad; ctx.fillRect(0, 0, 256, 256); for(let i=0; i<150; i++) { ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.3 + Math.random()*0.5; ctx.fillRect(Math.random()*256, Math.random()*100, 1.5, 1.5); } ctx.globalAlpha = 1.0; return new THREE.CanvasTexture(canvas); }
+
+        // ⚡ Textura de cascada: rayas verticales que se desplazan para dar la sensación de caída
+        function crearTexturaCascada() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 64, 256);
+            for (let i = 0; i < 70; i++) {
+                const x = Math.random() * 64, y = Math.random() * 256;
+                const h = 8 + Math.random() * 60, w = 0.8 + Math.random() * 2;
+                const alpha = 0.15 + Math.random() * 0.55;
+                ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+                ctx.fillRect(x, y, w, h);
+            }
+            for (let i = 0; i < 18; i++) {
+                const x = Math.random() * 64, y = Math.random() * 256;
+                const h = 30 + Math.random() * 90, w = 1.5 + Math.random() * 2;
+                ctx.fillStyle = `rgba(255,255,255,${0.55 + Math.random() * 0.35})`;
+                ctx.fillRect(x, y, w, h);
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+        const texCascada = crearTexturaCascada();
+
+        // Genera UVs para la cinta del río del .glb (que viene sin UVs)
+        function asignarUVsAlRio(geom) {
+            if (geom.attributes.uv) return; // ya tiene UVs
+            const pos = geom.attributes.position;
+            const count = pos.count;
+            let minY = Infinity, maxY = -Infinity;
+            for (let i = 0; i < count; i++) { const y = pos.getY(i); if (y < minY) minY = y; if (y > maxY) maxY = y; }
+            const rangeY = Math.max(maxY - minY, 0.001);
+            const uvs = new Float32Array(count * 2);
+            for (let i = 0; i < count; i++) {
+                const x = pos.getX(i), z = pos.getZ(i), y = pos.getY(i);
+                const v = (maxY - y) / rangeY * 3; // 3 repeticiones verticales
+                const u = (Math.atan2(z, x) + Math.PI) / (2 * Math.PI);
+                uvs[i * 2] = u;
+                uvs[i * 2 + 1] = v;
+            }
+            geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+        }
+
+        const texAgua = crearTexturaAgua();
+        const texQBlock = createTextTexture('?');
+        const texBlockUsed = createTextTexture('');
+        const texPowerup = createTextTexture('✨');
+        const texBloqueItem = createTextTexture('🧱');
+
+        const keys = { left:false, right:false, jump:false, action:false, build:false, fish:false, dash:false };
+        const setupBtn = (id, k) => { let el = document.getElementById(id); const p = (e)=>{e.preventDefault(); keys[k]=true; initAudio();}; const r = (e)=>{e.preventDefault(); keys[k]=false;}; el.addEventListener('touchstart', p, {passive:false}); el.addEventListener('touchend', r, {passive:false}); el.addEventListener('mousedown', p); el.addEventListener('mouseup', r); el.addEventListener('mouseleave', r); };
+        setupBtn('btnLeft', 'left'); setupBtn('btnRight', 'right'); setupBtn('btnJump', 'jump'); setupBtn('btnAction', 'action'); setupBtn('btnFish', 'fish'); setupBtn('btnDash', 'dash');
+        document.getElementById('btnBuild').addEventListener('mousedown', colocarBloque);
+        document.getElementById('btnBuild').addEventListener('touchstart', colocarBloque);
+
+        const geoParticula = new THREE.BoxGeometry(0.15, 0.15, 0.15); const cacheMatParticulas = {};
+        function getMatParticula(hex) { if(!cacheMatParticulas[hex]) cacheMatParticulas[hex] = new THREE.MeshBasicMaterial({color: hex}); return cacheMatParticulas[hex]; }
+        const geoBloqueColocar = new THREE.BoxGeometry(2, 2, 2); const matBloqueColocar = new THREE.MeshStandardMaterial({ color: 0x8B4513, map: texBloqueItem });
+        const geoDropBoss = new THREE.BoxGeometry(1.2, 1.2, 1.2); const geoDropEnemigo = new THREE.BoxGeometry(1.0, 1.0, 1.0);
+        const geoPow = new THREE.PlaneGeometry(1.5, 1.5); const matPow = new THREE.MeshBasicMaterial({map: texPowerup, transparent:true}); const matQBlockUsed = new THREE.MeshStandardMaterial({map: texBlockUsed});
+
+        const GAME_SPEED = 0.85;
+
+        let gameState = 'menu', score = 0, lives = 5, bloquesInventario = 0, ultimoBloque = 0, fishingCooldown = 0, gemasRecogidas = 0;
+        let pStats = { id: '', ammo: '', maxJumps: 1, speed: 0.38, projDmg: 1, projSpeed: 0.25, projLife: 70, ammoTex: null, ammoMat: null, ammoGeo: null };
+        let phys = { x: 0, y: 5, vx: 0, vy: 0, w: 1.2, h: 2.2, grounded: false, jumps: 0, prevJump: false, prevAct: false, prevFish: false, dir: 1, power: 'normal', invuln: 0, animTime: 0, prevDash: false, dashCooldown: 0, dashTime: 0, dashTrailTimer: 0, wasGrounded: true, comboCount: 0, comboTimer: 0, coyote: 0, isFishing: false };
+        let faseActual = 0, puntosInicioFase = [], scoreAlIniciarFase = 0; let gemas = [];
+        const combNode = document.getElementById('combo-alert');
+
+        const scene = new THREE.Scene();
+        scene.background = crearCieloGradient(configFases[0].skyC); scene.fog = new THREE.FogExp2(configFases[0].fog, 0.008);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1500);
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(window.devicePixelRatio > 1 ? 1.2 : 1.0); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
+        document.getElementById('gameContainer').appendChild(renderer.domElement);
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8); scene.add(hemiLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 2.2); dirLight.castShadow = true; dirLight.shadow.mapSize.width = 1024; dirLight.shadow.mapSize.height = 1024; const d = 30; dirLight.shadow.camera.left = -d; dirLight.shadow.camera.right = d; dirLight.shadow.camera.top = d; dirLight.shadow.camera.bottom = -d; dirLight.shadow.camera.near = 0.5; dirLight.shadow.camera.far = 100; dirLight.target.position.set(0, 0, 0); scene.add(dirLight); scene.add(dirLight.target);
+
+        let elementosEntorno = [], plataformas = [], bloques = [], powerups = [], enemigos = [], balas = [], particulas = [], dropsBloques = [], espumaAnimada = [], riosAnimados = [], efectosAgua = [], animNodes = {}, playerWrapper = null;
+
+        /* =========================================================
+           ASSETS
+           ========================================================= */
+        const modelosAssets = {
+            manuel: { file: 'manuel.glb', folder: 'gltf/' },
+            carlos: { file: 'carlos.glb', folder: 'gltf/' },
+            narci:  { file: 'narci.glb',  folder: 'gltf/' },
+            miguel: { file: 'miguel.glb', folder: 'gltf/' },
+
+            montana_1:  { file: 'montana_1.glb',  folder: 'gltf/' },
+            montana_2:  { file: 'montana_2.glb',  folder: 'gltf/' },
+            montana_3:  { file: 'montana_3.glb',  folder: 'gltf/' },
+            montana_4:  { file: 'montana_4.glb',  folder: 'gltf/' },
+            montana_5:  { file: 'montana_5.glb',  folder: 'gltf/' },
+            montana_6:  { file: 'montana_6.glb',  folder: 'gltf/' },
+            montana_7:  { file: 'montana_7.glb',  folder: 'gltf/' },
+            montana_8:  { file: 'montana_8.glb',  folder: 'gltf/' },
+            montana_9:  { file: 'montana_9.glb',  folder: 'gltf/' },
+            montana_10: { file: 'montana_10.glb', folder: 'gltf/' },
+
+            basilisco_rey:    { file: 'basilisco_rey.glb',    folder: 'gltf3/' },
+            manticora:        { file: 'manticora.glb',        folder: 'gltf3/' },
+            kraken_profundo:  { file: 'kraken_profundo.glb',  folder: 'gltf3/' },
+            aguila_gigante:   { file: 'aguila_gigante.glb',   folder: 'gltf3/' },
+            mamut_ancestral:  { file: 'mamut_ancestral.glb',  folder: 'gltf3/' },
+            escorpion_abisal: { file: 'escorpion_abisal.glb', folder: 'gltf3/' },
+            cerbero_3cabezas: { file: 'cerbero_3cabezas.glb', folder: 'gltf3/' },
+            dragon_rojo:      { file: 'dragon_rojo.glb',      folder: 'gltf3/' },
+
+            lobo_feroz:        { file: 'lobo_feroz.glb',        folder: 'gltf3/' },
+            arana_gigante:     { file: 'arana_gigante.glb',     folder: 'gltf3/' },
+            arpia:             { file: 'arpia.glb',             folder: 'gltf3/' },
+            ciclope:           { file: 'ciclope.glb',           folder: 'gltf3/' },
+            cobra_venenosa:    { file: 'cobra_venenosa.glb',    folder: 'gltf3/' },
+            demonio_abismo:    { file: 'demonio_abismo.glb',    folder: 'gltf3/' },
+            gargola_piedra:    { file: 'gargola_piedra.glb',    folder: 'gltf3/' },
+            gusano_sand:       { file: 'gusano_sand.glb',       folder: 'gltf3/' },
+
+            kraken_profundo_2: { file: 'kraken_profundo.glb',   folder: 'gltf3/' },
+            dragon_rojo_2:     { file: 'dragon_rojo.glb',       folder: 'gltf3/' },
+            escorpion_abisal_2:{ file: 'escorpion_abisal.glb',  folder: 'gltf3/' }
+        };
+
+        const arbolesNuevos = ['Tree_Bare_1_C_Color1.gltf', 'Tree_4_C_Color1.gltf', 'Tree_3_C_Color1.gltf', 'Tree_2_E_Color1.gltf', 'Tree_2_D_Color1.gltf', 'Tree_1_B_Color1.gltf'];
+        const rocasNuevas = ['Rock_2_H_Color1.gltf', 'Rock_2_E_Color1.gltf', 'Rock_1_Q_Color1.gltf', 'Rock_1_M_Color1.gltf'];
+        const modelosExtra = ['nube.glb', 'arbusto.glb', 'cactus.glb', 'cristal.glb', 'setas.glb', 'huesos.glb'];
+
+        arbolesNuevos.forEach(nombre => modelosAssets[nombre] = { file: nombre, folder: 'gltf/' });
+        rocasNuevas.forEach(nombre => modelosAssets[nombre] = { file: nombre, folder: 'gltf/' });
+        modelosExtra.forEach(nombre => modelosAssets[nombre] = { file: nombre, folder: 'gltf/' });
+
+        const mCargados = {}; const animsCargadas = {}; const loader = new GLTFLoader(); const keysAssets = Object.keys(modelosAssets); let cargados = 0;
+
+        function cargarAsset(k, assetInfo, onComplete) {
+            const filePath = assetInfo.folder + assetInfo.file;
+            loader.load(
+                filePath,
+                (gltf) => {
+                    let m = gltf.scene;
+                    if (k.startsWith('montana_')) { m.traverse(c => { if(c.isMesh && c.name.includes('espuma')) c.geometry.computeBoundingBox(); }); }
+                    m.traverse(c => {
+                        if(c.isMesh) {
+                            c.castShadow = true; c.receiveShadow = true; c.frustumCulled = false;
+                            if(c.material) c.material.roughness = 0.8;
+                            if(k === 'manuel' && c.material && c.material.color) {
+                                let hsl = {}; c.material.color.getHSL(hsl);
+                                if(hsl.h > 0.04 && hsl.h < 0.15 && hsl.s > 0.2 && hsl.l < 0.45) {
+                                    c.material = c.material.clone(); c.material.color.setHex(0xc29068);
+                                }
+                            }
+                        }
+                    });
+                    const box = new THREE.Box3().setFromObject(m);
+                    if (!box.isEmpty() && Number.isFinite(box.min.y)) {
+                        if (k.startsWith('montana_')) { mCargados[k] = m; }
+                        else {
+                            const offsetGrp = new THREE.Group();
+                            offsetGrp.add(m);
+                            m.position.y = -box.min.y;
+                            const isCharacter = ['manuel', 'carlos', 'narci', 'miguel'].includes(k);
+                            if (!isCharacter) {
+                                m.position.x = -(box.max.x + box.min.x)/2;
+                                m.position.z = -(box.max.z + box.min.z)/2;
+                            }
+                            if(arbolesNuevos.includes(k) || rocasNuevas.includes(k)) { m.scale.setScalar(0.85); }
+                            mCargados[k] = offsetGrp;
+                        }
+                    } else {
+                        mCargados[k] = new THREE.Group();
+                    }
+                    animsCargadas[k] = gltf.animations;
+                    onComplete();
+                },
+                undefined,
+                (err) => {
+                    console.warn('⚠️ No se pudo cargar:', filePath, err);
+                    mCargados[k] = new THREE.Group();
+                    animsCargadas[k] = [];
+                    onComplete();
+                }
+            );
+        }
+
+        keysAssets.forEach(k => {
+            cargarAsset(k, modelosAssets[k], () => { actualizarCarga(); });
+        });
+
+        function actualizarCarga() {
+            cargados++;
+            document.getElementById('progress-fill').style.width = Math.round((cargados / keysAssets.length) * 100) + '%';
+            if(cargados >= keysAssets.length) {
+                setTimeout(() => {
+                    document.getElementById('loading-container').style.display = 'none';
+                    document.getElementById('btn-group').style.display = 'flex';
+                }, 300);
+            }
+        }
+
+        function spawnParticulas(x, y, colorHex) { let mat = getMatParticula(colorHex); for(let i=0; i<6; i++) { const p = new THREE.Mesh(geoParticula, mat); p.position.set(x, y, 0); scene.add(p); particulas.push({ mesh: p, vx: (Math.random()-0.5)*0.6, vy: Math.random()*0.6, life: 1 }); } }
+
+        function calcularOnda(x) {
+            let h = 0;
+            h += Math.sin(x * 0.15) * 2.0;
+            h += Math.sin(x * 0.43 + 2.0) * 0.9;
+            h += Math.sin(x * 0.85 + 4.1) * 0.4;
+            h += Math.sin(x * 1.7 + 1.3) * 0.15;
+            return h;
+        }
+
+        /* =========================================================
+           ⚡ SISTEMA DE EFECTOS DE AGUA POR MONTAÑA
+           (niebla ascendente, burbujas en la poza y salpicaduras
+            en la base de la cascada)
+           ========================================================= */
+        function crearEfectosAgua(x, y, z, radioX, radioZ, fData) {
+            const grupo = new THREE.Group();
+            grupo.position.set(x, y, z);
+            const sistema = {
+                grupo: grupo,
+                radioX: radioX, radioZ: radioZ,
+                mist: [], burbujas: [], salpicaduras: [],
+                nextSplash: Math.random() * 20,
+                activo: false
+            };
+
+            // --- NIEBLA: esferas grandes semitransparentes que suben y se desvanecen ---
+            const geoMist = new THREE.SphereGeometry(1, 6, 5);
+            for (let i = 0; i < 14; i++) {
+                const mat = new THREE.MeshBasicMaterial({
+                    color: 0xffffff, transparent: true, opacity: 0,
+                    depthWrite: false, blending: THREE.AdditiveBlending
+                });
+                const m = new THREE.Mesh(geoMist, mat);
+                const sc = 0.6 + Math.random() * 1.4;
+                m.scale.setScalar(sc);
+                m.position.set(
+                    (Math.random() - 0.5) * radioX * 1.6,
+                    (Math.random() - 0.3) * 1.5,
+                    (Math.random() - 0.5) * radioZ * 1.2
+                );
+                m.userData = {
+                    vida: Math.random(),
+                    maxVida: 2.2 + Math.random() * 2.5,
+                    vy: 0.035 + Math.random() * 0.05,
+                    vx: (Math.random() - 0.5) * 0.02,
+                    vz: (Math.random() - 0.5) * 0.02,
+                    escalaIni: sc,
+                    escalaFin: sc * (1.4 + Math.random() * 1.0),
+                    opacidadMax: 0.28 + Math.random() * 0.22,
+                    ang: Math.random() * Math.PI * 2,
+                    radio: Math.random() * Math.min(radioX, radioZ) * 0.8
+                };
+                grupo.add(m);
+                sistema.mist.push(m);
+            }
+
+            // --- BURBUJAS: suben desde la poza y estallan al llegar a la superficie ---
+            const geoB = new THREE.SphereGeometry(0.14, 6, 5);
+            for (let i = 0; i < 26; i++) {
+                const mat = new THREE.MeshBasicMaterial({
+                    color: 0xffffff, transparent: true, opacity: 0,
+                    depthWrite: false
+                });
+                const b = new THREE.Mesh(geoB, mat);
+                const sc = 0.4 + Math.random() * 0.9;
+                b.scale.setScalar(sc);
+                const ang = Math.random() * Math.PI * 2;
+                const r = Math.sqrt(Math.random()) * Math.min(radioX, radioZ) * 0.9;
+                const baseY = -0.4 + Math.random() * 0.3;
+                const topY = 0.5 + Math.random() * 0.9;
+                b.position.set(Math.cos(ang) * r, baseY, Math.sin(ang) * r);
+                b.userData = {
+                    vida: Math.random(),
+                    baseY: baseY, topY: topY,
+                    velocidad: 0.4 + Math.random() * 0.8,
+                    fase: Math.random() * Math.PI * 2,
+                    rBase: r, angBase: ang,
+                    wobbleAmp: 0.05 + Math.random() * 0.12,
+                    opacidadMax: 0.45 + Math.random() * 0.4
+                };
+                grupo.add(b);
+                sistema.burbujas.push(b);
+            }
+
+            // --- SALPICADURAS: pequeñas gotas que saltan en la base de la cascada ---
+            const geoS = new THREE.IcosahedronGeometry(0.1, 0);
+            for (let i = 0; i < 18; i++) {
+                const mat = new THREE.MeshBasicMaterial({
+                    color: 0xffffff, transparent: true, opacity: 0,
+                    depthWrite: false, blending: THREE.AdditiveBlending
+                });
+                const s = new THREE.Mesh(geoS, mat);
+                s.visible = false;
+                s.userData = { vx: 0, vy: 0, vz: 0, vida: 0, maxVida: 0 };
+                grupo.add(s);
+                sistema.salpicaduras.push(s);
+            }
+
+            scene.add(grupo);
+            efectosAgua.push(sistema);
+            return sistema;
+        }
+
+        function actualizarEfectosAgua() {
+            const ahora = performance.now() * 0.001;
+            const dt = GAME_SPEED;
+            efectosAgua.forEach((sys, si) => {
+                if (!sys.grupo.parent) return;
+
+                // Niebla
+                for (const m of sys.mist) {
+                    const u = m.userData;
+                    u.vida += 0.012 * dt;
+                    m.position.x += u.vx * dt;
+                    m.position.y += u.vy * dt;
+                    m.position.z += u.vz * dt;
+                    const t = Math.min(u.vida / u.maxVida, 1);
+                    // Curva triangular: entra, se mantiene, se va
+                    const fade = t < 0.25 ? t / 0.25 : (t > 0.7 ? (1 - t) / 0.3 : 1);
+                    m.material.opacity = u.opacidadMax * Math.max(0, fade);
+                    const sc = u.escalaIni + (u.escalaFin - u.escalaIni) * t;
+                    m.scale.setScalar(sc);
+                    if (u.vida >= u.maxVida) {
+                        u.vida = 0;
+                        u.maxVida = 2.2 + Math.random() * 2.5;
+                        u.vy = 0.035 + Math.random() * 0.05;
+                        u.vx = (Math.random() - 0.5) * 0.02;
+                        u.vz = (Math.random() - 0.5) * 0.02;
+                        u.opacidadMax = 0.28 + Math.random() * 0.22;
+                        u.ang = Math.random() * Math.PI * 2;
+                        m.position.set(
+                            (Math.random() - 0.5) * sys.radioX * 1.6,
+                            (Math.random() - 0.3) * 1.5,
+                            (Math.random() - 0.5) * sys.radioZ * 1.2
+                        );
+                    }
+                }
+
+                // Burbujas
+                for (const b of sys.burbujas) {
+                    const u = b.userData;
+                    u.vida += 0.012 * dt * u.velocidad;
+                    if (u.vida >= 1) {
+                        u.vida = 0;
+                        const ang = Math.random() * Math.PI * 2;
+                        const r = Math.sqrt(Math.random()) * Math.min(sys.radioX, sys.radioZ) * 0.9;
+                        u.rBase = r; u.angBase = ang;
+                        u.baseY = -0.4 + Math.random() * 0.3;
+                        u.topY = 0.5 + Math.random() * 0.9;
+                        u.velocidad = 0.4 + Math.random() * 0.8;
+                        u.fase = Math.random() * Math.PI * 2;
+                    }
+                    const t = u.vida;
+                    b.position.y = u.baseY + (u.topY - u.baseY) * t;
+                    // Bamboleo lateral sutil
+                    const wobble = Math.sin(ahora * 2 + u.fase) * u.wobbleAmp;
+                    b.position.x = Math.cos(u.angBase) * u.rBase + wobble;
+                    b.position.z = Math.sin(u.angBase) * u.rBase + wobble * 0.7;
+                    // Fade in al subir, fade out al final
+                    const fade = t < 0.15 ? t / 0.15 : (t > 0.75 ? (1 - t) / 0.25 : 1);
+                    b.material.opacity = u.opacidadMax * Math.max(0, fade);
+                    b.scale.setScalar((0.4 + Math.random() * 0.02) + t * 0.4);
+                }
+
+                // Salpicaduras — spawn por tiempo
+                sys.nextSplash -= dt * 0.4;
+                if (sys.nextSplash <= 0) {
+                    sys.nextSplash = 4 + Math.random() * 8;
+                    const s = sys.salpicaduras.find(x => !x.visible);
+                    if (s) {
+                        s.visible = true;
+                        const ang = Math.random() * Math.PI * 2;
+                        const r = Math.random() * Math.min(sys.radioX, sys.radioZ) * 0.5;
+                        s.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
+                        s.userData.vx = (Math.random() - 0.5) * 0.18;
+                        s.userData.vy = 0.15 + Math.random() * 0.25;
+                        s.userData.vz = (Math.random() - 0.5) * 0.12;
+                        s.userData.vida = 0;
+                        s.userData.maxVida = 0.7 + Math.random() * 0.7;
+                        s.scale.setScalar(0.6 + Math.random() * 0.7);
+                    }
+                }
+
+                for (const s of sys.salpicaduras) {
+                    if (!s.visible) continue;
+                    const u = s.userData;
+                    u.vida += 0.03 * dt;
+                    u.vy -= 0.012 * dt;
+                    s.position.x += u.vx * dt;
+                    s.position.y += u.vy * dt;
+                    s.position.z += u.vz * dt;
+                    s.material.opacity = 0.85 * Math.max(0, 1 - u.vida / u.maxVida);
+                    if (u.vida >= u.maxVida || s.position.y < -0.5) {
+                        s.visible = false;
+                    }
+                }
+            });
+        }
+
+        function clonarYTintar(assetName, fData) {
+            if(!mCargados[assetName]) return null;
+            let clone = mCargados[assetName].clone();
+            if(!arbolesNuevos.includes(assetName) && !rocasNuevas.includes(assetName) && !modelosExtra.includes(assetName) && !assetName.startsWith('montana_')) {
+                clone.traverse(c => {
+                    if(c.isMesh && c.material) {
+                        c.material = c.material.clone();
+                        if (c.name === 'rio') { c.material = new THREE.MeshStandardMaterial({ map: texAgua, transparent: true, opacity: 0.9, emissive: fData.aguaGlow, emissiveIntensity: 0.8, color: fData.aguaColor, side: THREE.DoubleSide, depthWrite: false }); riosAnimados.push(c); }
+                        else if (c.name.includes('espuma')) { c.material = new THREE.MeshBasicMaterial({ color: fData.aguaColor, transparent: true, opacity: 0.8 }); espumaAnimada.push({ mesh: c, baseY: c.position.y, vy: Math.random()*0.1, life: Math.random() }); }
+                    }
+                });
+            }
+            // ⚡ Las montañas animan su río y su espuma
+            if (assetName.startsWith('montana_')) {
+                clone.traverse(c => {
+                    if (!c.isMesh) return;
+
+                    if (c.name === 'rio') {
+                        // UVs para que la textura fluya por la cinta
+                        if (c.geometry && !c.geometry.attributes.uv) {
+                            asignarUVsAlRio(c.geometry);
+                        }
+                        const texRio = texCascada.clone();
+                        texRio.needsUpdate = true;
+                        texRio.wrapS = THREE.RepeatWrapping;
+                        texRio.wrapT = THREE.RepeatWrapping;
+                        c.material = new THREE.MeshStandardMaterial({
+                            color: fData.aguaColor,
+                            map: texRio,
+                            emissive: fData.aguaGlow,
+                            emissiveIntensity: 0.6,
+                            transparent: true,
+                            opacity: 0.65,
+                            roughness: 0.15,
+                            metalness: 0.0,
+                            depthWrite: false,
+                            side: THREE.DoubleSide
+                        });
+                        c.renderOrder = 3;
+                        riosAnimados.push(c);
+
+                    } else if (c.name === 'poza_agua') {
+                        c.visible = false;
+
+                    } else if (c.name.startsWith('espuma_cascada_')) {
+                        c.material = new THREE.MeshBasicMaterial({
+                            color: 0xffffff,
+                            transparent: true,
+                            opacity: 0.35,
+                            depthWrite: false,
+                            blending: THREE.AdditiveBlending
+                        });
+                        c.renderOrder = 4;
+                        const baseY = c.position.y;
+                        const baseScale = c.scale.x || 1;
+                        espumaAnimada.push({
+                            mesh: c,
+                            baseY: baseY,
+                            baseScale: baseScale,
+                            vy: -(0.06 + Math.random() * 0.12),
+                            life: Math.random(),
+                            speed: 0.5 + Math.random() * 0.7
+                        });
+
+                    } else if (c.name.startsWith('espuma_')) {
+                        c.visible = false;
+                    }
+                });
+            }
+            return clone;
+        }
+
+        const matHpBg = new THREE.MeshBasicMaterial({color: 0xff0000, depthTest: false}); const matHpFg = new THREE.MeshBasicMaterial({color: 0x00ff00, depthTest: false});
+        function crearBarraVida() { const grp = new THREE.Group(); const bg = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.2), matHpBg); const fg = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.2), matHpFg); fg.position.z = 0.01; fg.name = 'hpFg'; grp.add(bg, fg); grp.renderOrder = 999; return grp; }
+
+        function registrarEntorno(mesh, body, x, isPlatform=false, w=0, h=0, y=0) {
+            elementosEntorno.push({ mesh: mesh, body: body, x: x, activo: false });
+            if(isPlatform) plataformas.push({ x: x - w/2, y: y, w: w, h: h });
+        }
+
+        function crearTerrenoOndulado(startX, w, cy, fIndex, fData = null, decorado = false) {
+            const numSegmentos = Math.max(3, Math.floor(w / 2)); 
+            const segW = w / numSegmentos;
+            const colorCesped = fData ? fData.cesped : 0x3a8b3a;
+            
+            if (!matBordeCespedBase[fIndex]) {
+                matBordeCespedBase[fIndex] = new THREE.MeshStandardMaterial({ color: colorCesped, roughness: 1.0, flatShading: true });
+            }
+            const matCesped = matBordeCespedBase[fIndex];
+            
+            for(let i = 0; i < numSegmentos; i++) {
+                let wave1 = calcularOnda(startX + i*segW); 
+                let wave2 = calcularOnda(startX + (i+1)*segW);
+                let hMedio = (wave1 + wave2) / 2; 
+                let anguloInclinacion = Math.atan2(wave2 - wave1, segW); 
+                let posX = startX + (i * segW) + (segW/2);
+                
+                const meshTop = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.05, 1.5, 7.5), matFases[fIndex].top); 
+                meshTop.position.set(posX, cy + hMedio - 0.75, 0); 
+                meshTop.rotation.z = anguloInclinacion; 
+                meshTop.castShadow = true; 
+                meshTop.receiveShadow = true;
+                
+                const bordeFront = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.1, 0.25, 0.6), matCesped);
+                bordeFront.position.set(0, 0.85, 3.5);
+                bordeFront.castShadow = true;
+                meshTop.add(bordeFront);
+                
+                const bordeBack = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.1, 0.25, 0.6), matCesped);
+                bordeBack.position.set(0, 0.85, -3.5);
+                bordeBack.castShadow = true;
+                meshTop.add(bordeBack);
+                
+                const meshBot = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.05, 40, 6.5), matFases[fIndex].bot); 
+                meshBot.position.set(posX, cy + hMedio - 1.5 - 19, 0); 
+                meshBot.receiveShadow = true;
+                
+                const body = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3((segW*1.05)/2, 1.5/2, 3.75)), material: matFisicas }); 
+                body.position.set(posX, cy + hMedio - 0.75, 0); 
+                body.quaternion.setFromAxisAngle(new CANNON.Vec3(0,0,1), anguloInclinacion);
+                registrarEntorno(meshTop, body, posX, true, segW*1.05, 1.5, cy + hMedio - 1.5); 
+                registrarEntorno(meshBot, null, posX);
+                
+                if (decorado && fData) {
+                    const numMatojos = 2 + Math.floor(Math.random() * 3);
+                    for (let g = 0; g < numMatojos; g++) {
+                        const gx = (Math.random() - 0.5) * segW * 0.85;
+                        const gz = (Math.random() - 0.5) * 6.5;
+                        const alto = 0.2 + Math.random() * 0.5;
+                        const ancho = 0.04 + Math.random() * 0.07;
+                        const matojo = new THREE.Mesh(geoMatojo, matMatojos[Math.floor(Math.random() * matMatojos.length)]);
+                        matojo.scale.set(ancho, alto, ancho);
+                        matojo.position.set(gx, 0.75 + alto/2, gz);
+                        matojo.rotation.x = (Math.random() - 0.5) * 0.4;
+                        matojo.rotation.z = (Math.random() - 0.5) * 0.4;
+                        matojo.rotation.y = Math.random() * Math.PI;
+                        matojo.castShadow = true;
+                        meshTop.add(matojo);
+                    }
+                    
+                    if (Math.random() < 0.25) {
+                        const fx = (Math.random() - 0.5) * segW * 0.7;
+                        const fz = (Math.random() - 0.5) * 5.5;
+                        const tallo = new THREE.Mesh(geoTallo, matTallo);
+                        tallo.position.set(fx, 0.95, fz);
+                        meshTop.add(tallo);
+                        const petalo = new THREE.Mesh(geoPetalo, matFlor[Math.floor(Math.random() * matFlor.length)]);
+                        petalo.position.set(fx, 1.2, fz);
+                        petalo.castShadow = true;
+                        meshTop.add(petalo);
+                    }
+                    
+                    if(Math.random() < 0.18) { 
+                        let pino = clonarYTintar(arbolesNuevos[Math.floor(Math.random() * arbolesNuevos.length)], fData); 
+                        if(pino) { 
+                            pino.position.set((Math.random() - 0.5) * segW, 0.75, -2 - Math.random() * 2.5); 
+                            pino.rotation.y = Math.random() * Math.PI * 2; 
+                            pino.scale.setScalar(0.7 + Math.random() * 0.6); 
+                            meshTop.add(pino); 
+                        } 
+                    }
+                    
+                    if(Math.random() < 0.25) {
+                        let decoracionesBiome = [];
+                        if (fIndex === 1) decoracionesBiome = ['cactus.glb', 'huesos.glb'];
+                        else if (fIndex === 2) decoracionesBiome = ['cristal.glb'];
+                        else if (fIndex === 3) decoracionesBiome = ['huesos.glb', 'cristal.glb'];
+                        else if (fIndex === 4 || fIndex === 5) decoracionesBiome = ['arbusto.glb', 'setas.glb'];
+                        else if (fIndex === 6) decoracionesBiome = ['setas.glb', 'cristal.glb', 'huesos.glb'];
+                        else if (fIndex === 7) decoracionesBiome = ['cristal.glb'];
+                        else decoracionesBiome = ['arbusto.glb', 'setas.glb'];
+                        if(decoracionesBiome.length > 0) {
+                            let decoName = decoracionesBiome[Math.floor(Math.random() * decoracionesBiome.length)];
+                            let deco = clonarYTintar(decoName, fData);
+                            if(deco) {
+                                deco.position.set((Math.random() - 0.5) * segW * 0.8, 0.75, -1.5 - Math.random() * 2.5);
+                                deco.rotation.y = Math.random() * Math.PI * 2;
+                                let s = 1.0;
+                                if(decoName === 'setas.glb') s = 0.8 + Math.random()*0.4;
+                                if(decoName === 'cactus.glb') s = 1.2 + Math.random()*0.5;
+                                if(decoName === 'cristal.glb') s = 0.8 + Math.random()*0.6;
+                                if(decoName === 'huesos.glb') s = 0.7 + Math.random()*0.4;
+                                if(decoName === 'arbusto.glb') s = 1.3 + Math.random()*0.6;
+                                deco.scale.setScalar(s);
+                                meshTop.add(deco);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function cacheAnimNodes(mesh) {
+            const nodes = {};
+            mesh.traverse(c => {
+                if (!c.name) return;
+                if (/leg|arm|wing|head|neck|tail|tentacle|jaw|body|trunk|foot|hand|horn/i.test(c.name)) {
+                    if (!nodes[c.name]) nodes[c.name] = c;
+                    const base = c.name.replace(/\d+$/, '');
+                    if (base && !nodes[base]) nodes[base] = c;
+                }
+            });
+            return nodes;
+        }
+
+        const ANIM_PROC = {
+          walk(nodes, t) {
+            const ph = t * 3.2;
+            const pairs = [['legFL', 0], ['legFR', Math.PI], ['legBL', Math.PI], ['legBR', 0]];
+            for (const [tag, off] of pairs) { const n = nodes[tag]; if (n) n.rotation.x = Math.sin(ph + off) * 0.55; }
+            if (nodes.armL) nodes.armL.rotation.x = -Math.sin(ph) * 0.35;
+            if (nodes.armR) nodes.armR.rotation.x =  Math.sin(ph) * 0.35;
+            if (nodes.head) nodes.head.rotation.x = Math.sin(ph * 2) * 0.05;
+            if (nodes.tail) nodes.tail.rotation.y = Math.sin(t * 2.4) * 0.35;
+          },
+          fly(nodes, t) {
+            const flap = Math.sin(t * 6.5) * 0.65;
+            if (nodes.wingL) nodes.wingL.rotation.z =  0.12 + flap;
+            if (nodes.wingR) nodes.wingR.rotation.z = -0.12 - flap;
+            if (nodes.head) nodes.head.rotation.y = Math.sin(t * 1.5) * 0.2;
+            if (nodes.tail) nodes.tail.rotation.y = Math.sin(t * 2.0) * 0.25;
+          },
+          slither(nodes, t) {
+            if (nodes.head) { nodes.head.rotation.y = Math.sin(t * 1.6) * 0.6; nodes.head.rotation.z = Math.sin(t * 2.2) * 0.15; }
+            if (nodes.body) nodes.body.rotation.y = Math.sin(t * 1.2) * 0.2;
+          },
+          arachnid(nodes, t) {
+            const ph = t * 5.0;
+            for (let i = 1; i <= 4; i++) {
+              const off = i * 0.8;
+              const l = nodes['legL' + i], r = nodes['legR' + i];
+              if (l) l.rotation.x = Math.sin(ph + off) * 0.22;
+              if (r) r.rotation.x = Math.sin(ph + off + Math.PI) * 0.22;
+            }
+            if (nodes.head) nodes.head.rotation.y = Math.sin(t * 0.8) * 0.15;
+          },
+          tentacles(nodes, t) {
+            for (let i = 1; i <= 8; i++) { const n = nodes['tentacle' + i]; if (n) { n.rotation.x = Math.sin(t * 1.4 + i * 0.7) * 0.18; n.rotation.z = Math.cos(t * 1.2 + i * 0.7) * 0.18; } }
+            if (nodes.head) nodes.head.rotation.y = Math.sin(t * 0.7) * 0.12;
+          },
+          hydra(nodes, t) {
+            for (let i = 1; i <= 6; i++) { const n = nodes['neck' + i]; if (n) { n.rotation.x = Math.sin(t * 1.6 + i * 0.9) * 0.15; n.rotation.z = Math.cos(t * 1.3 + i * 0.9) * 0.18; } }
+          },
+          idle(nodes, t) {
+            if (nodes.head) nodes.head.rotation.y = Math.sin(t * 1.0) * 0.22;
+            if (nodes.armL) nodes.armL.rotation.x = Math.sin(t * 1.2) * 0.08;
+            if (nodes.armR) nodes.armR.rotation.x = Math.sin(t * 1.2 + 1) * 0.08;
+            if (nodes.tail) nodes.tail.rotation.y = Math.sin(t * 1.1) * 0.25;
+          }
+        };
+
+        function elegirEstilo(tipo, esVolador) {
+          const s = (tipo || '').toLowerCase();
+          if (esVolador) return 'fly';
+          if (s.includes('aguila') || s.includes('arpia') || s.includes('dragon')) return 'fly';
+          if (s.includes('serpiente') || s.includes('cobra') || s.includes('basilisco')) return 'slither';
+          if (s.includes('arana') || s.includes('escorpion') || s.includes('gusano')) return 'arachnid';
+          if (s.includes('kraken')) return 'tentacles';
+          if (s.includes('hidra')) return 'hydra';
+          if (s.includes('gargola') || s.includes('golem')) return 'idle';
+          if (s.includes('cerbero')) return 'walk';
+          return 'walk';
+        }
+
+        function animarProcedural(nodes, tipo, t, esVolador) {
+          if (!nodes) return;
+          const estilo = elegirEstilo(tipo, esVolador);
+          const fn = ANIM_PROC[estilo] || ANIM_PROC.idle;
+          fn(nodes, t);
+        }
+
+        function generarTodaLaCampana() {
+            let cx = -5; let cy = 0;
+            const enemigosBasicos = ['lobo_feroz', 'arana_gigante', 'arpia', 'ciclope', 'cobra_venenosa', 'demonio_abismo', 'gargola_piedra', 'gusano_sand', 'kraken_profundo_2', 'dragon_rojo_2'];
+
+            for(let f = 0; f < configFases.length; f++) {
+                let fData = configFases[f]; puntosInicioFase[f] = cx;
+                if(f > 0) { 
+                    let banderin = new THREE.Group(); 
+                    let mastil = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 5), new THREE.MeshStandardMaterial({color: 0xcccccc})); 
+                    mastil.position.set(0, 2.5, 0); banderin.add(mastil); 
+                    let tela = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1), new THREE.MeshBasicMaterial({color: 0xffcc00, side: THREE.DoubleSide})); 
+                    tela.position.set(0.75, 4.5, 0); banderin.add(tela); 
+                    banderin.position.set(cx + 4, cy + calcularOnda(cx + 4) - 0.2, -1); 
+                    registrarEntorno(banderin, null, cx + 4); 
+                }
+                crearTerrenoOndulado(cx, 30, cy, f, fData, true); cx += 30;
+
+                for(let i=0; i<18; i++) {
+                    let w = 15 + Math.random()*10; 
+                    let gap = 4 + Math.random()*4 + fData.gapExtra; 
+                    let escalon = Math.floor(Math.random() * 3) - 1; 
+                    cy += (escalon * 3.5); 
+                    if(cy > 10) cy -= 5; 
+                    if(cy < -6) cy += 5;
+                    
+                    if (i > 0 && i % 4 === 0) { 
+                        let anchoLago = 6 + Math.random() * 4 + fData.gapExtra; 
+                        gap += anchoLago; 
+                        
+                        const opcionesMontana = fData.montanas;
+                        const idxElegido = opcionesMontana[Math.floor(Math.random() * opcionesMontana.length)];
+                        const montanaKey = 'montana_' + idxElegido;
+                        
+                        let mont = clonarYTintar(montanaKey, fData); 
+                        if(mont) { 
+                            mont.position.set(cx + gap/2, cy - 2, -16); 
+                            mont.scale.setScalar(1.2); 
+                            
+                            let luzCanyon = new THREE.PointLight(fData.aguaColor, 25, 70);
+                            luzCanyon.position.set(0, 12, 2);
+                            mont.add(luzCanyon);
+                            
+                            registrarEntorno(mont, null, cx + gap/2); 
+                        } 
+                        
+                        let lago = new THREE.Mesh(new THREE.PlaneGeometry(anchoLago + 4, 20), new THREE.MeshBasicMaterial({ map: texAgua, transparent: true, opacity: 0.85, color: fData.aguaColor, depthWrite: false })); 
+                        lago.rotation.x = -Math.PI / 2; 
+                        lago.position.set(cx + gap/2, cy - 2.5, -2); 
+                        registrarEntorno(lago, null, cx + gap/2); 
+
+                        // ⚡ Efectos animados de agua (niebla, burbujas, salpicaduras)
+                        // Se colocan ligeramente por encima del lago para que las
+                        // burbujas nazcan desde la superficie.
+                        const efectos = crearEfectosAgua(
+                            cx + gap/2, cy - 2.0, -2,
+                            (anchoLago + 4) * 0.5, 8, fData
+                        );
+                        registrarEntorno(efectos.grupo, null, cx + gap/2);
+                    }
+                    
+                    crearTerrenoOndulado(cx + gap, w, cy, f, fData, true); 
+                    let slotRoca = cx + gap + w - 4; 
+                    let slotBloque = cx + gap + w/2;
+
+                    if(Math.random() > 0.3) { 
+                        let esc = 1.0 + Math.random() * 0.5; 
+                        let rocaY = cy + calcularOnda(slotRoca); 
+                        let roca = clonarYTintar(rocasNuevas[Math.floor(Math.random() * rocasNuevas.length)], fData); 
+                        if(roca) { 
+                            roca.position.set(slotRoca, rocaY - 0.2, -0.5); 
+                            roca.scale.setScalar(esc); 
+                            const rBody = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(0.8 * esc, 1.2 * esc, 3)), material: matFisicas }); 
+                            rBody.position.set(slotRoca, rocaY + (1.2 * esc) - 0.2, -0.5); 
+                            registrarEntorno(roca, rBody, slotRoca); 
+                        } 
+                    }
+
+                    if (f !== 3 && f !== 6 && Math.random() > 0.4) {
+                        let nube = clonarYTintar('nube.glb', fData);
+                        if(nube) {
+                            let nubeX = cx + gap + Math.random() * w;
+                            let nubeY = cy + 12 + Math.random() * 10;
+                            nube.position.set(nubeX, nubeY, -12 - Math.random() * 10);
+                            nube.scale.setScalar(2.5 + Math.random() * 4);
+                            nube.rotation.y = Math.random() * Math.PI * 2;
+                            registrarEntorno(nube, null, nubeX);
+                        }
+                    }
+
+                    if(Math.random() > 0.05) {
+                        let maxE = 2 + Math.floor(Math.random() * 3);
+                        let baseEX = cx + gap + w/2;
+                        for (let k = 0; k < maxE; k++) {
+                            let tipo = enemigosBasicos[Math.floor(Math.random()*enemigosBasicos.length)];
+                            if(mCargados[tipo]) {
+                                let enWrapper = new THREE.Group();
+                                let en = mCargados[tipo].clone();
+                                en.scale.setScalar(1.183);
+                                enWrapper.add(en);
+
+                                let enMixer = null;
+                                if (animsCargadas[tipo] && animsCargadas[tipo].length > 0) {
+                                    enMixer = new THREE.AnimationMixer(en);
+                                    let action = enMixer.clipAction(animsCargadas[tipo][0]);
+                                    action.play();
+                                }
+
+                                let hpBar = crearBarraVida(); hpBar.position.y = 3.04; enWrapper.add(hpBar);
+                                let eX = baseEX + (k - (maxE-1)/2) * 3.4;
+                                let isFlying = (tipo === 'arpia' || tipo === 'aguila_gigante' || tipo === 'dragon_rojo' || tipo === 'dragon_rojo_2');
+                                let eY = isFlying ? (cy + calcularOnda(eX) + 9 + (k%2)) : (cy + calcularOnda(eX));
+                                enWrapper.position.set(eX, eY, 0);
+                                let eNodes = cacheAnimNodes(en);
+
+                                let vxDir = (k%2 === 0) ? 1 : -1;
+                                enemigos.push({ mesh: enWrapper, hpBarGrp: hpBar, nodes: eNodes, mixer: enMixer, x: eX, y: eY, w: 2.37, h: 2.37, tipo: tipo, vx: 0.08 * vxDir, minX: eX - 4, maxX: eX + 4, hp: 3, maxHp: 3, flying: isFlying, baseY: cy, activo: false });
+                            }
+                        }
+                    }
+
+                    if(Math.random() > 0.3) { 
+                        let b = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshStandardMaterial({map: texQBlock})); 
+                        let bY = cy + calcularOnda(slotBloque) + 4.5; 
+                        b.position.set(slotBloque, bY, 0); 
+                        b.castShadow = true; 
+                        const bBody = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(1,1,1)), material: matFisicas }); 
+                        bBody.position.set(slotBloque, bY, 0); 
+                        bloques.push({ mesh: b, body: bBody, x: slotBloque, baseY: bY, w: 2, h: 2, used: false, activo: false }); 
+                    }
+
+                    if(Math.random() > 0.3) {
+                        let numGemas = 3 + Math.floor(Math.random()*4);
+                        let gemaBaseX = cx + gap + w/2;
+                        let arco = Math.random() < 0.5;
+                        for(let g=0; g<numGemas; g++) {
+                            let gx = gemaBaseX + (g - (numGemas-1)/2) * 1.3;
+                            let gy = cy + calcularOnda(gx) + 1.5 + (arco ? Math.sin((g/(numGemas-1||1)) * Math.PI) * 2.5 : 0);
+                            let gMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.35), new THREE.MeshStandardMaterial({ color: 0x66ddff, emissive: 0x2299cc, emissiveIntensity: 0.9, roughness: 0.2, metalness: 0.6 })); 
+                            gMesh.position.set(gx, gy, 0); 
+                            gMesh.castShadow = true; 
+                            gemas.push({ mesh: gMesh, x: gx, y: gy, w: 0.6, h: 0.6, activo: false, tomada: false, spin: Math.random()*10 });
+                        }
+                    }
+                    if(Math.random() > 0.4) {
+                        let numGemas = 2 + Math.floor(Math.random()*3);
+                        let gemaBaseX = cx + w/2;
+                        for(let g=0; g<numGemas; g++) {
+                            let gx = gemaBaseX + (g - (numGemas-1)/2) * 1.5;
+                            let gy = cy + calcularOnda(gx) + 4;
+                            let gMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.35), new THREE.MeshStandardMaterial({ color: 0x66ddff, emissive: 0x2299cc, emissiveIntensity: 0.9, roughness: 0.2, metalness: 0.6 })); 
+                            gMesh.position.set(gx, gy, 0); 
+                            gMesh.castShadow = true; 
+                            gemas.push({ mesh: gMesh, x: gx, y: gy, w: 0.6, h: 0.6, activo: false, tomada: false, spin: Math.random()*10 });
+                        }
+                    }
+
+                    cx += w + gap;
+                }
+                cx += 8; crearTerrenoOndulado(cx, 40, cy, f, fData, true);
+
+                if(mCargados[fData.boss]) {
+                    let bWrapper = new THREE.Group();
+                    let bModel = mCargados[fData.boss].clone();
+                    let bossScaleFactor = (1.5 + (f * 0.2)) * 1.4;
+                    bModel.scale.setScalar(bossScaleFactor);
+                    bWrapper.add(bModel);
+
+                    let bMixer = null;
+                    if (animsCargadas[fData.boss] && animsCargadas[fData.boss].length > 0) {
+                        bMixer = new THREE.AnimationMixer(bModel);
+                        let bAction = bMixer.clipAction(animsCargadas[fData.boss][0]);
+                        bAction.play();
+                    }
+
+                    let bMaxHp = 15 + (f * 15);
+                    let hpBar = crearBarraVida(); hpBar.position.y = 7.0; hpBar.scale.setScalar(2.2); bWrapper.add(hpBar);
+                    let bossX = cx + 20;
+                    let bY = fData.flyingBoss ? (cy + calcularOnda(bossX) + 6) : (cy + calcularOnda(bossX));
+                    bWrapper.position.set(bossX, bY, 0);
+                    let bNodes = cacheAnimNodes(bModel);
+
+                    enemigos.push({ mesh: bWrapper, hpBarGrp: hpBar, nodes: bNodes, mixer: bMixer, x: bossX, y: bY, w: 4.9, h: 6.3, tipo: fData.boss, esBoss: true, vx: 0, minX: cx+5, maxX: cx+35, hp: bMaxHp, maxHp: bMaxHp, flying: fData.flyingBoss, isBossFase: f, baseY: cy, activo: false, jumpOffset: 0, jumpVy: 0 });
+                }
+                cx += 40; 
+                if (f < configFases.length - 1) { crearTerrenoOndulado(cx, 20, cy, f, fData, true); cx += 20; }
+            }
+        }
+
+        function colocarBloque() {
+            let ahora = Date.now(); if(bloquesInventario <= 0 || gameState !== 'playing' || ahora - ultimoBloque < 500) return; ultimoBloque = ahora;
+            let targetX = Math.round(phys.x + (phys.dir * 3)); let targetY = Math.round(phys.y);
+            const bMesh = new THREE.Mesh(geoBloqueColocar, matBloqueColocar); bMesh.position.set(targetX + 1, targetY + 1, 0); bMesh.castShadow = true; bMesh.receiveShadow = true; scene.add(bMesh);
+            const bBody = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(1,1,1)), material: matFisicas }); bBody.position.set(targetX + 1, targetY + 1, 0); world.addBody(bBody);
+            spawnParticulas(targetX + 1, targetY + 1, 0x8B4513); playSound('jump'); bloquesInventario--; updateUI();
+        }
+
+        window.iniciarJuego = function(id, ammo) {
+            initAudio(); playMusic();
+            pStats.id = id; pStats.ammo = ammo; pStats.ammoTex = createTextTexture(ammo); pStats.ammoMat = new THREE.MeshBasicMaterial({map: pStats.ammoTex, transparent:true, side: THREE.DoubleSide}); pStats.ammoGeo = new THREE.PlaneGeometry(1.5, 1.5);
+            pStats.maxJumps = (id === 'narci') ? 2 : 1;
+            pStats.projDmg = (id === 'manuel') ? 3 : 1;
+            pStats.projSpeed = (id === 'miguel') ? 0.30 : 0.22;
+            pStats.projLife = (id === 'miguel') ? 140 : 70;
+
+            document.getElementById('menu').style.display = 'none'; document.getElementById('ui-layer').style.display = 'block';
+            if('ontouchstart' in window || navigator.maxTouchPoints > 0) document.getElementById('controls').style.display = 'flex';
+            if(id === 'miguel') document.getElementById('btnFish').style.display = 'flex'; else document.getElementById('btnFish').style.display = 'none';
+
+            let rawModel = mCargados[id].clone(); playerWrapper = new THREE.Group(); playerWrapper.add(rawModel); scene.add(playerWrapper);
+            playerWrapper.traverse(c => { if(c.name === 'armL') animNodes.armL = c; if(c.name === 'armR') animNodes.armR = c; if(c.name === 'legL') animNodes.legL = c; if(c.name === 'legR') animNodes.legR = c; if(c.name === 'canaPescar') animNodes.cana = c; });
+
+            playerWrapper.rotation.y = Math.PI / 2;
+
+            playerBody = new CANNON.Body({ mass: 5, shape: new CANNON.Sphere(0.6), material: matFisicas, fixedRotation: true, linearDamping: 0.1 }); scene.add(playerWrapper); world.addBody(playerBody);
+            generarTodaLaCampana(); prepararFase(0, true);
+        };
+
+        function setEntornoFase(index) {
+            scene.background = crearCieloGradient(configFases[index].skyC); 
+            scene.fog.color.setHex(configFases[index].fog); 
+            dirLight.color.setHex(configFases[index].aguaColor);
+            let alertEl = document.getElementById('phase-alert'); 
+            alertEl.innerText = configFases[index].nombre; 
+            alertEl.style.opacity = 1; 
+            setTimeout(() => { alertEl.style.opacity = 0; }, 4000);
+        }
+
+        function prepararFase(index, isFirstTime) {
+            faseActual = index; 
+            phys.x = puntosInicioFase[faseActual] + 2; 
+            phys.y = 15; 
+            phys.vx = 0; 
+            playerBody.position.set(phys.x + 0.6, phys.y + 0.6, 0); 
+            playerBody.velocity.set(0,0,0);
+            setEntornoFase(faseActual);
+            if(isFirstTime) { score = 0; scoreAlIniciarFase = 0; lives = 5; bloquesInventario = 8; gemasRecogidas = 0; } 
+            else { score = scoreAlIniciarFase; lives = 5; bloquesInventario = Math.max(5, bloquesInventario); }
+            phys.comboCount = 0; phys.comboTimer = 0; phys.dashCooldown = 0; phys.dashTime = 0; phys.dashTrailTimer = 0; phys.isFishing = false; phys.power = 'normal'; phys.invuln = 120; updateUI(); gameState = 'playing';
+            if(isFirstTime) bucleJuego();
+        }
+
+        window.continuarDesdeFase = function() {
+            document.getElementById('game-over-screen').style.display = 'none';
+            prepararFase(faseActual, false);
+            bucleJuego();
+        };
+
+        function updateUI() {
+            let h = ""; for(let i=0; i<lives; i++) h+="❤️"; for(let i=lives; i<5; i++) h+="🖤";
+            document.getElementById('ui-lives').innerText = h; 
+            document.getElementById('score-display').innerText = `PUNTOS: ${score}`; 
+            document.getElementById('block-display').innerText = `🧱 BLOQUES: ${bloquesInventario}`; 
+            document.getElementById('ui-gemas').innerText = `💎 GEMAS: ${gemasRecogidas}`; 
+            document.getElementById('ui-player').innerText = `${pStats.id}`;
+            if(playerWrapper) { 
+                if(phys.power === 'super') { 
+                    playerWrapper.scale.setScalar(1.2); 
+                    playerWrapper.traverse(c => { if(c.isMesh && c.material) c.material.emissive = new THREE.Color(0x006666); }); 
+                } else { 
+                    playerWrapper.scale.setScalar(1.0); 
+                    playerWrapper.traverse(c => { if(c.isMesh && c.material) c.material.emissive = new THREE.Color(0x000000); }); 
+                } 
+            }
+        }
+
+        function checkColl(ax, ay, aw, ah, bx, by, bw, bh) { return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by; }
+
+        function takeDamage(reboundX=0) {
+            if(phys.invuln > 0) return;
+            playSound('hurt');
+            if(phys.power === 'super') { 
+                phys.power = 'normal'; 
+                phys.invuln = 90; 
+                playerBody.velocity.set(reboundX * 10, 15, 0); 
+                updateUI(); 
+                spawnParticulas(phys.x, phys.y, 0xFFFFFF); 
+            }
+            else { 
+                lives--; 
+                bloquesInventario = Math.max(5, bloquesInventario); 
+                updateUI(); 
+                if(lives <= 0) { gameState = 'gameover'; document.getElementById('game-over-screen').style.display = 'flex'; } 
+                else { 
+                    phys.invuln = 90; 
+                    playerBody.velocity.set(reboundX * 10, 15, 0); 
+                    spawnParticulas(phys.x, phys.y, 0xFF0000); 
+                } 
+            }
+        }
+
+        function bucleJuego() {
+            if(gameState !== 'playing') return; 
+            requestAnimationFrame(bucleJuego);
+            let px = phys.x; 
+            const DIST_VISION = 60;
+
+            for(let el of elementosEntorno) { let cerca = Math.abs(el.x - px) < DIST_VISION; if(cerca && !el.activo) { scene.add(el.mesh); if(el.body) world.addBody(el.body); el.activo = true; } else if(!cerca && el.activo) { scene.remove(el.mesh); if(el.body) world.removeBody(el.body); el.activo = false; } }
+            for(let b of bloques) { let cerca = Math.abs(b.x - px) < DIST_VISION; if(cerca && !b.activo) { scene.add(b.mesh); if(b.body) world.addBody(b.body); b.activo = true; } else if(!cerca && b.activo) { scene.remove(b.mesh); if(b.body) world.removeBody(b.body); b.activo = false; } }
+            for(let e of enemigos) { let cerca = Math.abs(e.x - px) < DIST_VISION; if(cerca && !e.activo && e.hp > 0) { scene.add(e.mesh); e.activo = true; } else if(!cerca && e.activo) { scene.remove(e.mesh); e.activo = false; } }
+            for(let g of gemas) { if(g.tomada) continue; let cerca = Math.abs(g.x - px) < DIST_VISION; if(cerca && !g.activo) { scene.add(g.mesh); g.activo = true; } else if(!cerca && g.activo) { scene.remove(g.mesh); g.activo = false; } }
+
+            texAgua.offset.y += 0.035 * GAME_SPEED;
+
+            // ⚡ Río: pulso de emisión + scroll de la textura de cascada
+            riosAnimados.forEach((r, i) => {
+                if (!r.material) return;
+                if (r.material.emissiveIntensity !== undefined) {
+                    r.material.emissiveIntensity = 0.5 + Math.sin(Date.now() * 0.003 + i) * 0.2;
+                }
+                if (r.material.map) {
+                    r.material.map.offset.y -= 0.035 * GAME_SPEED;
+                    r.material.map.offset.x += 0.006 * GAME_SPEED;
+                }
+            });
+
+            // ⚡ Espuma de la cascada: cae por la cinta con fade in/out
+            espumaAnimada.forEach(p => {
+                if (Math.abs(p.mesh.position.x - px) > DIST_VISION) return;
+                p.life += 0.012 * GAME_SPEED * (p.speed || 0.7);
+                if (p.life >= 1) {
+                    p.life = 0;
+                    p.mesh.position.y = p.baseY;
+                }
+                p.mesh.position.y += (p.vy || -0.08) * GAME_SPEED;
+                const t = p.life;
+                const fade = t < 0.15 ? t / 0.15 : (t > 0.75 ? (1 - t) / 0.25 : 1);
+                if (p.mesh.material) p.mesh.material.opacity = 0.5 * fade;
+                const sc = (p.baseScale || 1) * (0.6 + t * 0.8);
+                p.mesh.scale.setScalar(sc);
+            });
+
+            // ⚡ Niebla / burbujas / salpicaduras en las pozas y cascadas
+            actualizarEfectosAgua();
+
+            if(phys.invuln > 0) { phys.invuln -= GAME_SPEED; playerWrapper.visible = (Math.floor(Date.now()/100)%2===0); } else playerWrapper.visible = true;
+            if(fishingCooldown > 0) fishingCooldown -= GAME_SPEED;
+
+            let targetVx = 0;
+            if(keys.left) { targetVx = -pStats.speed * 40; phys.dir = -1; playerWrapper.rotation.y = -Math.PI/2; }
+            else if(keys.right) { targetVx = pStats.speed * 40; phys.dir = 1; playerWrapper.rotation.y = Math.PI/2; }
+
+            if (phys.invuln < 70) { playerBody.velocity.x += (targetVx - playerBody.velocity.x) * 0.2; }
+
+            let isGrounded = false;
+            for (let i = 0; i < world.contacts.length; i++) { let c = world.contacts[i]; if (c.bi === playerBody || c.bj === playerBody) { if (c.bi === playerBody && c.ni.y < -0.2) isGrounded = true; if (c.bj === playerBody && c.ni.y > 0.2) isGrounded = true; } }
+
+            if(isGrounded) phys.coyote = 15; else if(phys.coyote > 0) phys.coyote -= GAME_SPEED;
+            phys.grounded = (phys.coyote > 0);
+
+            if (phys.grounded && targetVx === 0) { playerBody.linearDamping = 0.9; } else { playerBody.linearDamping = 0.1; }
+            if(phys.grounded && !phys.wasGrounded) { phys.comboCount = 0; } 
+            phys.wasGrounded = phys.grounded;
+
+            if(keys.jump && !phys.prevJump) {
+                let jumpFuerza = (phys.power === 'super') ? 22 : 18;
+                if(pStats.id === 'carlos') jumpFuerza *= 1.30;
+                if(phys.grounded) { playerBody.velocity.y = jumpFuerza; phys.jumps = 1; spawnParticulas(px, phys.y, 0x888888); phys.coyote = 0; playSound('jump'); }
+                else if(phys.jumps < pStats.maxJumps) { playerBody.velocity.y = jumpFuerza * 0.85; phys.jumps++; spawnParticulas(px + phys.w/2, phys.y, 0x00FFCC); playSound('jump'); }
+            } phys.prevJump = keys.jump;
+
+            if(phys.dashCooldown > 0) phys.dashCooldown -= GAME_SPEED;
+            if(phys.dashTime > 0) {
+                phys.dashTime -= GAME_SPEED; playerBody.velocity.x = phys.dir * 26; playerBody.velocity.y *= 0.9; phys.dashTrailTimer -= GAME_SPEED;
+                if(phys.dashTrailTimer <= 0) { spawnParticulas(px + phys.w/2, phys.y + phys.h/2, 0x00ffaa); phys.dashTrailTimer = 2; }
+            } else if(keys.dash && !phys.prevDash && phys.dashCooldown <= 0) {
+                phys.dashTime = 9; phys.dashCooldown = 80; phys.dashTrailTimer = 0; phys.invuln = Math.max(phys.invuln, 14); playSound('dash');
+                if(playerBody.velocity.y < 0) playerBody.velocity.y = 0;
+            } phys.prevDash = keys.dash;
+
+            if(keys.action && !phys.prevAct) {
+                let m = new THREE.Mesh(pStats.ammoGeo, pStats.ammoMat);
+                m.position.set(px + phys.w/2, phys.y + 0.5, 0);
+                scene.add(m);
+                let isBoomerang = (pStats.id === 'manuel' && phys.power === 'super');
+                let startV = isBoomerang ? phys.dir * 0.6 : phys.dir * pStats.projSpeed;
+                let bMaxLife = isBoomerang ? 110 : pStats.projLife;
+                balas.push({ mesh: m, x: px + phys.w/2, y: phys.y + 0.5, startX: px, w: 1, h: 1, vx: startV, vy: isBoomerang ? 0 : 0.15, life: bMaxLife, maxLife: bMaxLife, sliding: false, boomerang: isBoomerang, startDir: phys.dir, hitTargets: new Set() });
+                playSound('shoot');
+                if(animNodes.armR && !phys.isFishing) animNodes.armR.rotation.x = -Math.PI/2;
+            } phys.prevAct = keys.action;
+
+            if(keys.fish && !phys.prevFish && pStats.id === 'miguel' && fishingCooldown <= 0) {
+                if(phys.grounded) {
+                    let from = new CANNON.Vec3(px + (phys.dir * 1.5) + 0.6, phys.y + 1, 0);
+                    let to = new CANNON.Vec3(px + (phys.dir * 1.5) + 0.6, phys.y - 2.5, 0);
+                    let result = new CANNON.RaycastResult();
+                    world.raycastClosest(from, to, { skipBackfaces: true }, result);
+                    if(!result.hasHit) {
+                        phys.isFishing = true; fishingCooldown = 120; playSound('splash');
+                        if(animNodes.armR) animNodes.armR.rotation.x = -Math.PI / 1.5; if(animNodes.cana) animNodes.cana.rotation.x = -Math.PI / 4;
+                        setTimeout(() => {
+                            if(animNodes.armR) animNodes.armR.rotation.x = Math.PI / 4; if(animNodes.cana) animNodes.cana.rotation.x = Math.PI / 3;
+                            spawnParticulas(px + (phys.dir * 3), phys.y - 1, 0x00ffff);
+                            setTimeout(() => {
+                                if(animNodes.armR) animNodes.armR.rotation.x = 0; if(animNodes.cana) animNodes.cana.rotation.x = 0;
+                                let popup = new THREE.Mesh(geoBloqueColocar, matBloqueColocar); popup.position.set(px + phys.w/2, phys.y + 3, 0); popup.castShadow = true; scene.add(popup); playSound('coin');
+                                let frame = 0;
+                                let animBloque = setInterval(() => {
+                                    if(!popup.parent) return clearInterval(animBloque);
+                                    popup.position.y += 0.06; popup.rotation.y += 0.15; frame++;
+                                    if(frame > 15) { clearInterval(animBloque); scene.remove(popup); spawnParticulas(popup.position.x, popup.position.y, 0x8B4513); bloquesInventario++; updateUI(); phys.isFishing = false; }
+                                }, 30);
+                            }, 400);
+                        }, 250);
+                    } else {
+                        combNode.innerText = "¡ACÉRCATE A UN BORDE!"; combNode.classList.add('show');
+                        setTimeout(() => combNode.classList.remove('show'), 1500);
+                    }
+                }
+            } phys.prevFish = keys.fish;
+
+            world.step((1 / 60) * GAME_SPEED);
+
+            phys.vx = playerBody.velocity.x; phys.vy = playerBody.velocity.y; phys.x = playerBody.position.x - 0.6; phys.y = playerBody.position.y - 0.6;
+            if (faseActual < configFases.length - 1 && phys.x >= puntosInicioFase[faseActual + 1]) { faseActual++; setEntornoFase(faseActual); scoreAlIniciarFase = score; }
+            if(phys.grounded) { lastSafeX = phys.x; lastSafeY = phys.y; } 
+            if(phys.y < -20) { playerBody.position.set(lastSafeX, lastSafeY + 5, 0); playerBody.velocity.set(0,0,0); takeDamage(); }
+
+            playerWrapper.position.set(playerBody.position.x, phys.y, 0);
+
+            if(Math.abs(phys.vx) > 0.5 && phys.grounded) { 
+                phys.animTime += 0.5 * GAME_SPEED; 
+                let o = Math.sin(phys.animTime) * 0.9; 
+                if(animNodes.legL) { 
+                    animNodes.legL.rotation.x = o; 
+                    animNodes.legR.rotation.x = -o; 
+                    animNodes.armL.rotation.x = -o; 
+                    if(!phys.isFishing) animNodes.armR.rotation.x = o; 
+                } 
+            } else if (!phys.grounded && animNodes.legL) { 
+                animNodes.legL.rotation.x = -0.5; 
+                animNodes.legR.rotation.x = 0.5; 
+                animNodes.armL.rotation.x = 2.5; 
+                if(!phys.isFishing) animNodes.armR.rotation.x = 2.5; 
+            }
+
+            for(let i = balas.length-1; i >= 0; i--) {
+                let b = balas[i];
+                if (b.boomerang) {
+                    b.vx -= b.startDir * 0.012 * GAME_SPEED;
+                    b.x += b.vx * GAME_SPEED;
+                    b.y += ((phys.y + 0.5) - b.y) * 0.04 * GAME_SPEED;
+                } else {
+                    if (!b.sliding) { b.vy -= 0.012 * GAME_SPEED; }
+                    b.x += b.vx * GAME_SPEED;
+                    b.y += b.vy * GAME_SPEED;
+                    let from = new CANNON.Vec3(b.x, b.y + 0.5, 0);
+                    let to = new CANNON.Vec3(b.x, b.y - 0.8, 0);
+                    let res = new CANNON.RaycastResult();
+                    world.raycastClosest(from, to, { skipBackfaces: true }, res);
+                    if (res.hasHit && b.vy <= 0) {
+                        b.sliding = true;
+                        b.y = res.hitPointWorld.y + 0.5;
+                        b.vy = 0;
+                    }
+                }
+                b.life -= GAME_SPEED;
+                b.mesh.rotation.z -= (b.boomerang ? 0.4 : b.vx * 0.5) * GAME_SPEED;
+                b.mesh.position.set(b.x, b.y, 0);
+                let hitNormal = false;
+                for(let e of enemigos) {
+                    if(!e.activo) continue;
+                    if(checkColl(b.x, b.y, b.w, b.h, e.x, e.y, e.w, e.h)) {
+                        if (b.boomerang) {
+                            if (!b.hitTargets.has(e)) {
+                                let dmg = e.esBoss ? pStats.projDmg : pStats.projDmg * 2;
+                                e.hp -= dmg;
+                                playSound('hit');
+                                spawnParticulas(e.x+1, e.y+1, 0x00FFCC);
+                                b.hitTargets.add(e);
+                            }
+                        } else {
+                            if(e.esBoss) { e.hp -= 1; } else { e.hp -= pStats.projDmg; }
+                            playSound('hit');
+                            spawnParticulas(e.x+1, e.y+1, 0x00FFCC);
+                            hitNormal = true; break;
+                        }
+                    }
+                }
+                if((!b.boomerang && hitNormal) || b.life <= 0 || b.y < -15) {
+                    scene.remove(b.mesh);
+                    balas.splice(i,1);
+                }
+            }
+
+            for(let b of bloques) { 
+                if(!b.activo) continue; 
+                let bRealX = b.x - 1; 
+                let bRealY = b.baseY - 1; 
+                if(checkColl(phys.x, phys.y, phys.w, phys.h + 0.5, bRealX, bRealY, b.w, b.h)) { 
+                    if(phys.vy > 0.1 && phys.y + phys.h < bRealY + 1.5) { 
+                        playerBody.velocity.y = -5; 
+                        if(!b.used) { 
+                            b.used = true; 
+                            playSound('coin'); 
+                            b.mesh.material = matQBlockUsed; 
+                            let pow = new THREE.Mesh(geoPow, matPow); 
+                            pow.position.set(b.x, b.baseY + 1, 0); 
+                            scene.add(pow); 
+                            powerups.push({ mesh: pow, x: b.x - 0.75, y: b.baseY + 0.25, w: 1.5, h: 1.5, vy: 0.35 }); 
+                        } 
+                    } 
+                } 
+            }
+            
+            for(let p of powerups) { 
+                p.vy -= 0.02 * GAME_SPEED; 
+                p.y += p.vy * GAME_SPEED; 
+                p.mesh.position.y = p.y + p.h/2; 
+                let hitFloor = false; 
+                for(let pl of plataformas) { 
+                    if(checkColl(p.x, p.y, p.w, p.h, pl.x, pl.y, pl.w, pl.h)){ 
+                        hitFloor = true; 
+                        p.y = pl.y + pl.h; 
+                        p.vy = 0; 
+                        break; 
+                    } 
+                } 
+                if(checkColl(phys.x, phys.y, phys.w, phys.h, p.x, p.y, p.w, p.h)) { 
+                    phys.power = 'super'; 
+                    playSound('coin'); 
+                    if(pStats.id === 'carlos') bloquesInventario += 3; 
+                    updateUI(); 
+                    spawnParticulas(p.x, p.y, 0x00FFCC); 
+                    scene.remove(p.mesh); 
+                    powerups.splice(powerups.indexOf(p),1); 
+                } 
+            }
+
+            for(let g of gemas) {
+                if(g.tomada || !g.activo) continue;
+                g.spin += 0.08 * GAME_SPEED;
+                g.mesh.rotation.y = g.spin;
+                g.mesh.position.y = g.y + Math.sin(g.spin*1.3) * 0.15;
+                if(checkColl(phys.x, phys.y, phys.w, phys.h, g.x - 0.3, g.y - 0.3, g.w, g.h)) {
+                    g.tomada = true;
+                    score += 10;
+                    gemasRecogidas++;
+                    if(gemasRecogidas >= 50) {
+                        gemasRecogidas -= 50;
+                        if(lives < 5) { lives++; spawnParticulas(phys.x, phys.y + 1, 0x00FF00); }
+                        playSound('coin');
+                        setTimeout(() => playSound('jump'), 150);
+                    } else { playSound('coin'); }
+                    spawnParticulas(g.x, g.y, 0x66ddff);
+                    scene.remove(g.mesh);
+                    updateUI();
+                }
+            }
+
+            for(let i=dropsBloques.length-1; i>=0; i--) { 
+                let d = dropsBloques[i]; 
+                if (Math.abs(d.x - phys.x) > DIST_VISION) continue; 
+                d.mesh.rotation.y += 0.04 * GAME_SPEED; 
+                d.mesh.rotation.x += 0.02 * GAME_SPEED; 
+                d.mesh.position.y = d.y + Math.sin(Date.now()*0.005 + d.x) * 0.3; 
+                if(checkColl(phys.x, phys.y, phys.w, phys.h, d.x, d.y, d.w, d.h)) { 
+                    bloquesInventario += (d.w > 1.0 ? 5 : 2); 
+                    playSound('coin'); 
+                    updateUI(); 
+                    spawnParticulas(d.x, d.y, 0x8B4513); 
+                    scene.remove(d.mesh); 
+                    dropsBloques.splice(i,1); 
+                } 
+            }
+
+            for(let i=enemigos.length-1; i>=0; i--) {
+                let e = enemigos[i]; if(!e.activo) continue;
+
+                if (e.mixer) e.mixer.update((1 / 60) * GAME_SPEED);
+
+                if (e.esBoss) {
+                    let speed = e.flying ? 0.15 : 0.08;
+                    let dir = (phys.x > e.x) ? 1 : -1;
+                    e.vx += (dir * speed - e.vx) * 0.05 * GAME_SPEED;
+                    if (!e.flying) {
+                        if (e.jumpOffset === undefined) { e.jumpOffset = 0; e.jumpVy = 0; }
+                        if (e.jumpOffset <= 0 && Math.random() < 0.015) { e.jumpVy = 0.45 + Math.random() * 0.3; }
+                        if (e.jumpOffset > 0 || e.jumpVy > 0) {
+                            e.jumpVy -= 0.035 * GAME_SPEED;
+                            e.jumpOffset += e.jumpVy * GAME_SPEED;
+                            if (e.jumpOffset < 0) { e.jumpOffset = 0; e.jumpVy = 0; }
+                        }
+                    }
+                }
+
+                e.x += e.vx * GAME_SPEED;
+                if(e.x < e.minX) { e.x = e.minX; e.vx = Math.abs(e.vx); }
+                if(e.x > e.maxX) { e.x = e.maxX; e.vx = -Math.abs(e.vx); }
+
+                e.mesh.position.x = e.x + (e.esBoss ? e.w/2 : 0);
+                e.animTime = (e.animTime || 0) + 0.15 * GAME_SPEED;
+
+                if (e.nodes) animarProcedural(e.nodes, e.tipo, e.animTime, e.flying);
+
+                let alturaTerreno = e.baseY + calcularOnda(e.x);
+                if(e.flying) {
+                    e.mesh.position.y = alturaTerreno + 4 + Math.sin(e.animTime*0.5)*2;
+                    e.y = alturaTerreno + 4;
+                } else {
+                    let saltoCaminar = Math.abs(Math.sin(e.animTime)) * 0.2;
+                    let jOffset = e.jumpOffset || 0;
+                    e.mesh.position.y = alturaTerreno + saltoCaminar + jOffset;
+                    e.y = alturaTerreno + jOffset;
+                }
+
+                let modelMesh = e.mesh.children[0];
+                if(modelMesh) {
+                    modelMesh.rotation.y = (e.vx > 0) ? Math.PI / 2 : -Math.PI / 2;
+                    if (e.jumpVy && e.jumpVy > 0) modelMesh.rotation.z = (e.vx > 0) ? -0.2 : 0.2;
+                    else if (e.jumpVy && e.jumpVy < 0) modelMesh.rotation.z = (e.vx > 0) ? 0.2 : -0.2;
+                    else modelMesh.rotation.z = 0;
+                }
+
+                if(e.hpBarGrp) { 
+                    e.hpBarGrp.quaternion.copy(camera.quaternion); 
+                    let fg = e.hpBarGrp.getObjectByName('hpFg'); 
+                    if(fg) { 
+                        let hpPercent = Math.max(0, e.hp / e.maxHp); 
+                        fg.scale.x = hpPercent; 
+                        fg.position.x = -0.75 * (1 - hpPercent); 
+                    } 
+                }
+
+                if(checkColl(phys.x, phys.y, phys.w, phys.h, e.x, e.y, e.w, e.h)) {
+                    if(phys.vy < -0.1 && phys.y > e.y + e.h - 0.5) {
+                        playerBody.velocity.y = (pStats.id === 'carlos' && phys.power === 'super') ? 22 * 1.30 : 18;
+                        playSound('hit');
+                        if(e.esBoss) e.hp -= 5; else e.hp -= e.maxHp;
+                        spawnParticulas(e.x+e.w/2, e.y+e.h/2, 0xFF0055);
+                        phys.invuln = Math.max(phys.invuln, 18);
+                    } else {
+                        takeDamage(phys.x < e.x ? -0.5 : 0.5);
+                    }
+                }
+
+                if(e.hp <= 0 && !e.dying) {
+                    e.dying = true; playSound('hit');
+                    if(e.esBoss) { 
+                        score += 500; 
+                        for(let drop=0; drop<5; drop++) { 
+                            let dropM = new THREE.Mesh(geoDropBoss, matBloqueColocar); 
+                            let posDropX = e.x + (drop - 2) * 1.5; 
+                            dropM.position.set(posDropX, e.y + 1, 0); 
+                            dropM.castShadow = true; 
+                            scene.add(dropM); 
+                            dropsBloques.push({ mesh: dropM, x: posDropX - 0.6, y: e.y + 0.4, w: 1.2, h: 1.2 }); 
+                        } 
+                        spawnParticulas(e.x+e.w/2, e.y+e.h/2, 0xFFD700); 
+                        if(e.isBossFase < 7) { 
+                            let alertEl = document.getElementById('phase-alert'); 
+                            alertEl.innerText = "¡JEFE DERROTADO!"; 
+                            alertEl.style.opacity = 1; 
+                            setTimeout(() => { alertEl.style.opacity = 0; }, 3500); 
+                        } else { 
+                            let alertEl = document.getElementById('phase-alert'); 
+                            alertEl.innerText = "¡VICTORIA FINAL!"; 
+                            alertEl.style.opacity = 1; 
+                        } 
+                    } else { 
+                        score += 25; 
+                        if(Math.random() < 0.4) { 
+                            let dropM = new THREE.Mesh(geoDropEnemigo, matBloqueColocar); 
+                            dropM.position.set(e.x + e.w/2, e.y + 1, 0); 
+                            dropM.castShadow = true; 
+                            scene.add(dropM); 
+                            dropsBloques.push({ mesh: dropM, x: e.x + e.w/2 - 0.5, y: e.y + 0.5, w: 1.0, h: 1.0 }); 
+                        } 
+                    } 
+                    scene.remove(e.mesh); 
+                    e.activo = false; 
+                    enemigos.splice(i,1); 
+                    updateUI();
+                }
+            }
+
+            for(let i=particulas.length-1; i>=0; i--) { 
+                let p = particulas[i]; 
+                p.mesh.position.x += p.vx * GAME_SPEED; 
+                p.mesh.position.y += p.vy * GAME_SPEED; 
+                p.vy -= 0.02 * GAME_SPEED; 
+                p.life -= 0.05 * GAME_SPEED; 
+                p.mesh.scale.setScalar(Math.max(0, p.life)); 
+                if(p.life <= 0) { scene.remove(p.mesh); particulas.splice(i,1); } 
+            }
+
+            dirLight.position.x = phys.x + 10; 
+            dirLight.target.position.set(phys.x, phys.y, 0); 
+            dirLight.target.updateMatrixWorld();
+
+            // CÁMARA ORBITAL 360°
+            const camTargetX = phys.x;
+            const camTargetY = phys.y + 2 + cameraOffsetY * 0.5;
+            const camTargetZ = 0;
+            const dirX = -Math.sin(cameraYaw);
+            const dirZ = -Math.cos(cameraYaw);
+            const camPosX = camTargetX - dirX * cameraZoom;
+            const camPosY = camTargetY + 4 + cameraOffsetY;
+            const camPosZ = camTargetZ - dirZ * cameraZoom;
+            camera.position.x += (camPosX - camera.position.x) * (0.1 * GAME_SPEED);
+            camera.position.y += (camPosY - camera.position.y) * (0.08 * GAME_SPEED);
+            camera.position.z += (camPosZ - camera.position.z) * (0.1 * GAME_SPEED);
+            const lookAtX = camTargetX + dirX * 2;
+            const lookAtY = camTargetY;
+            const lookAtZ = camTargetZ + dirZ * 2;
+            camera.lookAt(lookAtX, lookAtY, lookAtZ);
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
