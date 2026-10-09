@@ -657,6 +657,58 @@
             });
         }
 
+        // ⚡ Materiales tintados por bioma (perspectiva atmosférica), compartidos entre copias
+        const cacheTintes = {};
+        function materialTintado(mat, fData, factor) {
+            const clave = configFases.indexOf(fData) + '|' + mat.uuid + '|' + factor;
+            if (!cacheTintes[clave]) {
+                const m = mat.clone();
+                m.color.lerp(new THREE.Color(fData.fog), factor);
+                cacheTintes[clave] = m;
+            }
+            return cacheTintes[clave];
+        }
+
+        // Montañas apoyadas en el valle (bajo el nivel del lago) en vez de flotar
+        const bboxMontanas = {};
+        function colocarMontana(mont, clave, x, cyBase, z) {
+            const escala = 1.2;
+            if (!bboxMontanas[clave]) bboxMontanas[clave] = new THREE.Box3().setFromObject(mCargados[clave]);
+            mont.scale.setScalar(escala);
+            const baseY = bboxMontanas[clave].isEmpty() ? 0 : bboxMontanas[clave].min.y;
+            mont.position.set(x, cyBase - 3 - baseY * escala, z);
+        }
+
+        // Cordillera continua al fondo: une montañas, horizonte y cielo en una sola silueta
+        let cordillera = null;
+        function crearCordilleraFondo() {
+            const ancho = 2048, alto = 512;
+            const canvas = document.createElement('canvas');
+            canvas.width = ancho; canvas.height = alto;
+            const g = canvas.getContext('2d');
+            const degradado = g.createLinearGradient(0, 120, 0, alto);
+            degradado.addColorStop(0, 'rgba(255,255,255,1)');
+            degradado.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = degradado;
+            g.beginPath();
+            g.moveTo(0, alto);
+            for (let x = 0; x <= ancho; x += 4) {
+                const t = (x / ancho) * Math.PI * 2; // frecuencias enteras: el patrón encaja al repetirse
+                g.lineTo(x, 210 - 60 * Math.sin(3 * t + 0.7) - 35 * Math.sin(7 * t + 2.1) - 15 * Math.sin(13 * t + 4.0));
+            }
+            g.lineTo(ancho, alto);
+            g.closePath();
+            g.fill();
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.repeat.set(7.5, 1);
+            const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, color: 0x335577 });
+            const malla = new THREE.Mesh(new THREE.PlaneGeometry(9000, 70), mat);
+            malla.position.set(2800, 2, -40);
+            scene.add(malla);
+            return malla;
+        }
+
         function clonarYTintar(assetName, fData) {
             if(!mCargados[assetName]) return null;
             let clone = mCargados[assetName].clone();
@@ -668,6 +720,9 @@
                         else if (c.name.includes('espuma')) { c.material = new THREE.MeshBasicMaterial({ color: fData.aguaColor, transparent: true, opacity: 0.8 }); espumaAnimada.push({ mesh: c, baseY: c.position.y, vy: Math.random()*0.1, life: Math.random() }); }
                     }
                 });
+            }
+            if (assetName === 'nube.glb') {
+                clone.traverse(c => { if (c.isMesh && c.material) c.material = materialTintado(c.material, fData, 0.3); });
             }
             // ⚡ Las montañas animan su río y su espuma
             if (assetName.startsWith('montana_')) {
@@ -723,6 +778,8 @@
 
                     } else if (c.name.startsWith('espuma_')) {
                         c.visible = false;
+                    } else {
+                        c.material = materialTintado(c.material, fData, 0.3);
                     }
                 });
             }
@@ -929,6 +986,7 @@
         }
 
         function generarTodaLaCampana() {
+            if (!cordillera) cordillera = crearCordilleraFondo();
             let cx = -5; let cy = 0;
             const enemigosBasicos = ['lobo_feroz', 'arana_gigante', 'arpia', 'ciclope', 'cobra_venenosa', 'demonio_abismo', 'gargola_piedra', 'gusano_sand', 'kraken_profundo_2', 'dragon_rojo_2'];
 
@@ -963,8 +1021,7 @@
                         
                         let mont = clonarYTintar(montanaKey, fData); 
                         if(mont) { 
-                            mont.position.set(cx + gap/2, cy - 2, -16); 
-                            mont.scale.setScalar(1.2); 
+                            colocarMontana(mont, montanaKey, cx + gap/2, cy, -16);
                             
                             let luzCanyon = new THREE.PointLight(fData.aguaColor, 25, 70);
                             luzCanyon.position.set(0, 12, 2);
@@ -1147,7 +1204,8 @@
 
         function setEntornoFase(index) {
             scene.background = crearCieloGradient(configFases[index].skyC); 
-            scene.fog.color.setHex(configFases[index].fog); 
+            scene.fog.color.setHex(configFases[index].fog);
+            if (cordillera) cordillera.material.color.set(new THREE.Color(configFases[index].fog).lerp(new THREE.Color(0x4a3c7a), 0.7));
             dirLight.color.setHex(configFases[index].aguaColor);
             let alertEl = document.getElementById('phase-alert'); 
             alertEl.innerText = configFases[index].nombre; 
