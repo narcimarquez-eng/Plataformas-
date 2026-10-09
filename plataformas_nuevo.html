@@ -32,6 +32,11 @@
         #game-over-screen h1 { font-size: 60px; color: #ff0055; margin-bottom: 10px; }
         #btn-continue { background: #ffcc00; color: #000; border: none; padding: 15px 40px; font-size: 24px; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 30px; transition: transform 0.1s; }
         #btn-continue:active { transform: scale(0.9); }
+        #pause-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 45; color: white; pointer-events: none; }
+        #pause-screen h1 { font-size: 56px; color: #ffcc00; margin-bottom: 10px; text-shadow: 0 0 20px #ffcc00; }
+        #btn-pausa { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: 46px; height: 46px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.5); background: rgba(0,0,0,0.45); color: #fff; font-size: 20px; cursor: pointer; pointer-events: auto; z-index: 16; }
+        .ayuda { color: #ddd; font-size: 15px; line-height: 1.6; text-align: center; max-width: 620px; margin: -6px 0 18px; }
+        .ayuda b { color: #ffcc00; }
         .menu-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #2a1b4e 0%, #0d0614 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 30; overflow-y: auto; padding: 20px; box-sizing: border-box; }
         h1 { color: #FFF; font-size: 45px; margin-bottom: 20px; text-align: center; text-shadow: 0 0 20px #ffcc00; }
         h1 span { color: #ffcc00; }
@@ -57,6 +62,7 @@
                 <div class="panel-info"><div id="ui-player">Héroe</div><div id="ui-lives">❤️❤️❤️❤️❤️</div></div>
                 <div class="panel-info" style="text-align: right;"><div id="score-display">PUNTOS: 0</div><div id="block-display">🧱 BLOQUES: 0</div><div id="ui-gemas">💎 GEMAS: 0</div></div>
             </div>
+            <button id="btn-pausa" aria-label="Pausa">⏸</button>
             <div id="phase-alert">FASE 1</div>
             <div id="combo-alert">¡ACÉRCATE A UN BORDE!</div>
         </div>
@@ -65,6 +71,7 @@
             <p style="font-size: 20px;" id="go-desc">Regresarás al último banderín.</p>
             <button id="btn-continue" onclick="continuarDesdeFase()">REAPARECER</button>
         </div>
+        <div id="pause-screen"><h1>PAUSA</h1><p style="font-size: 20px;">Pulsa P o Esc para continuar</p></div>
         <div id="controls">
             <div class="pad"><div class="btn" id="btnLeft">⬅️</div><div class="btn" id="btnRight">➡️</div></div>
             <div class="pad">
@@ -77,6 +84,7 @@
         </div>
         <div id="menu" class="menu-overlay">
             <h1>HÉROES <span>MÁRQUEZ</span></h1>
+            <p class="ayuda"><b>Teclado:</b> ← → / A D mover · ↑ / W / Espacio saltar · Z / J disparar · Shift / X esquivar · B / E bloque · F pescar (Miguel) · P / Esc pausa<br><b>Pantalla táctil:</b> botones en pantalla · arrastra para girar la cámara · rueda o pellizco para el zoom</p>
             <div id="btn-group" style="display:none;">
                 <button class="char-btn" style="width: 100%; background: #3498db; border-color: #2980b9; justify-content: center;" onclick="toggleFullScreen()">
                     <span>🔲 PANTALLA COMPLETA</span>
@@ -282,6 +290,26 @@
         document.getElementById('btnBuild').addEventListener('mousedown', colocarBloque);
         document.getElementById('btnBuild').addEventListener('touchstart', colocarBloque);
 
+        document.getElementById('btn-pausa').addEventListener('click', alternarPausa);
+
+        // --- TECLADO ---
+        // ←/→ o A/D: mover · ↑/W/Espacio: saltar · Z/J: disparar · Shift/X: esquivar
+        // B/E: colocar bloque · F: pescar (Miguel) · P/Esc: pausa
+        const MAPA_TECLAS = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'jump', KeyW: 'jump', Space: 'jump', KeyZ: 'action', KeyJ: 'action', ShiftLeft: 'dash', ShiftRight: 'dash', KeyX: 'dash', KeyF: 'fish' };
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyP' || e.code === 'Escape') { if (!e.repeat) alternarPausa(); return; }
+            if (gameState !== 'playing') return;
+            if (e.code === 'KeyB' || e.code === 'KeyE') { if (!e.repeat) colocarBloque(); return; }
+            const accion = MAPA_TECLAS[e.code];
+            if (!accion) return;
+            e.preventDefault();
+            keys[accion] = true;
+            initAudio();
+        });
+        window.addEventListener('keyup', (e) => { const accion = MAPA_TECLAS[e.code]; if (accion) keys[accion] = false; });
+        window.addEventListener('blur', () => { for (const accion in keys) keys[accion] = false; });
+        document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'playing') alternarPausa(); });
+
         const geoParticula = new THREE.BoxGeometry(0.15, 0.15, 0.15); const cacheMatParticulas = {};
         function getMatParticula(hex) { if(!cacheMatParticulas[hex]) cacheMatParticulas[hex] = new THREE.MeshBasicMaterial({color: hex}); return cacheMatParticulas[hex]; }
         const geoBloqueColocar = new THREE.BoxGeometry(2, 2, 2); const matBloqueColocar = new THREE.MeshStandardMaterial({ color: 0x8B4513, map: texBloqueItem });
@@ -292,7 +320,7 @@
 
         let gameState = 'menu', score = 0, lives = 5, bloquesInventario = 0, ultimoBloque = 0, fishingCooldown = 0, gemasRecogidas = 0;
         let pStats = { id: '', ammo: '', maxJumps: 1, speed: 0.38, projDmg: 1, projSpeed: 0.25, projLife: 70, ammoTex: null, ammoMat: null, ammoGeo: null };
-        let phys = { x: 0, y: 5, vx: 0, vy: 0, w: 1.2, h: 2.2, grounded: false, jumps: 0, prevJump: false, prevAct: false, prevFish: false, dir: 1, power: 'normal', invuln: 0, animTime: 0, prevDash: false, dashCooldown: 0, dashTime: 0, dashTrailTimer: 0, wasGrounded: true, comboCount: 0, comboTimer: 0, coyote: 0, isFishing: false };
+        let phys = { x: 0, y: 5, vx: 0, vy: 0, w: 1.2, h: 2.2, grounded: false, jumps: 0, prevJump: false, prevAct: false, prevFish: false, dir: 1, power: 'normal', invuln: 0, animTime: 0, prevDash: false, dashCooldown: 0, dashTime: 0, dashTrailTimer: 0, wasGrounded: true, comboCount: 0, comboTimer: 0, coyote: 0, isFishing: false, bufferSalto: 0, enSalto: false };
         let faseActual = 0, puntosInicioFase = [], scoreAlIniciarFase = 0; let gemas = [];
         const combNode = document.getElementById('combo-alert');
 
@@ -1105,7 +1133,7 @@
             pStats.projLife = (id === 'miguel') ? 140 : 70;
 
             document.getElementById('menu').style.display = 'none'; document.getElementById('ui-layer').style.display = 'block';
-            if('ontouchstart' in window || navigator.maxTouchPoints > 0) document.getElementById('controls').style.display = 'flex';
+            document.getElementById('controls').style.display = 'flex';
             if(id === 'miguel') document.getElementById('btnFish').style.display = 'flex'; else document.getElementById('btnFish').style.display = 'none';
 
             let rawModel = mCargados[id].clone(); playerWrapper = new THREE.Group(); playerWrapper.add(rawModel); scene.add(playerWrapper);
@@ -1128,6 +1156,7 @@
         }
 
         function prepararFase(index, isFirstTime) {
+            ultimoTiempo = 0; acumuladorTiempo = 0;
             faseActual = index; 
             phys.x = puntosInicioFase[faseActual] + 2; 
             phys.y = 15; 
@@ -1190,10 +1219,57 @@
             }
         }
 
-        function bucleJuego() {
-            if(gameState !== 'playing') return; 
+        // ⚡ Bucle a paso fijo (60 Hz): la velocidad del juego no depende de la pantalla.
+        // Antes, en pantallas de 120 Hz el juego iba al doble de velocidad y el héroe
+        // parecía descontrolado.
+        const PASO_FIJO = 1 / 60;
+        let acumuladorTiempo = 0, ultimoTiempo = 0;
+        function bucleJuego(tiempo = performance.now()) {
+            if (gameState !== 'playing' && gameState !== 'paused') return;
             requestAnimationFrame(bucleJuego);
-            let px = phys.x; 
+            if (!ultimoTiempo) ultimoTiempo = tiempo;
+            acumuladorTiempo += Math.min((tiempo - ultimoTiempo) / 1000, 0.1);
+            ultimoTiempo = tiempo;
+            while (gameState === 'playing' && acumuladorTiempo >= PASO_FIJO) {
+                actualizarJuego();
+                acumuladorTiempo -= PASO_FIJO;
+            }
+            if (gameState !== 'playing') acumuladorTiempo = 0;
+            renderer.render(scene, camera);
+        }
+
+        function alternarPausa() {
+            if (gameState === 'playing') {
+                gameState = 'paused';
+                document.getElementById('pause-screen').style.display = 'flex';
+            } else if (gameState === 'paused') {
+                gameState = 'playing';
+                ultimoTiempo = 0; acumuladorTiempo = 0;
+                document.getElementById('pause-screen').style.display = 'none';
+            }
+        }
+
+        // Animación del héroe: el paso depende de la velocidad real y vuelve suavemente
+        // a la pose de reposo (antes las piernas se quedaban congeladas al parar)
+        function animarPersonaje() {
+            const n = animNodes;
+            if (!n.legL) return;
+            const enSuelo = phys.grounded;
+            const corriendo = enSuelo && Math.abs(phys.vx) > 0.5;
+            if (corriendo) phys.animTime += Math.abs(phys.vx) * 0.02 * GAME_SPEED;
+            const paso = corriendo ? Math.sin(phys.animTime) * 0.6 : 0;
+            const pose = enSuelo
+                ? { legL: paso, legR: -paso, armL: -paso, armR: paso }
+                : { legL: -0.5, legR: 0.5, armL: 2.5, armR: 2.5 };
+            const suavizar = (nodo, objetivo) => { if (nodo) nodo.rotation.x += (objetivo - nodo.rotation.x) * 0.25; };
+            suavizar(n.legL, pose.legL);
+            suavizar(n.legR, pose.legR);
+            suavizar(n.armL, pose.armL);
+            if (!phys.isFishing) suavizar(n.armR, pose.armR);
+        }
+
+        function actualizarJuego() {
+            let px = phys.x;
             const DIST_VISION = 60;
 
             for(let el of elementosEntorno) { let cerca = Math.abs(el.x - px) < DIST_VISION; if(cerca && !el.activo) { scene.add(el.mesh); if(el.body) world.addBody(el.body); el.activo = true; } else if(!cerca && el.activo) { scene.remove(el.mesh); if(el.body) world.removeBody(el.body); el.activo = false; } }
@@ -1237,9 +1313,18 @@
             if(phys.invuln > 0) { phys.invuln -= GAME_SPEED; playerWrapper.visible = (Math.floor(Date.now()/100)%2===0); } else playerWrapper.visible = true;
             if(fishingCooldown > 0) fishingCooldown -= GAME_SPEED;
 
+            // Izquierda/derecha según la pantalla: con la cámara girada, "derecha" sigue siendo la derecha de la pantalla
+            const sentidoPantalla = Math.cos(cameraYaw) >= 0 ? 1 : -1;
+            const entradaX = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
             let targetVx = 0;
-            if(keys.left) { targetVx = -pStats.speed * 40; phys.dir = -1; playerWrapper.rotation.y = -Math.PI/2; }
-            else if(keys.right) { targetVx = pStats.speed * 40; phys.dir = 1; playerWrapper.rotation.y = Math.PI/2; }
+            if (entradaX !== 0) {
+                const sentido = entradaX * sentidoPantalla;
+                targetVx = sentido * pStats.speed * 40;
+                phys.dir = sentido;
+                playerWrapper.rotation.y = sentido > 0 ? Math.PI / 2 : -Math.PI / 2;
+                // Mientras el héroe avanza, la cámara vuelve poco a poco a la vista lateral
+                if (!isDraggingCam) cameraYaw -= Math.atan2(Math.sin(cameraYaw), Math.cos(cameraYaw)) * 0.03 * GAME_SPEED;
+            }
 
             if (phys.invuln < 70) { playerBody.velocity.x += (targetVx - playerBody.velocity.x) * 0.2; }
 
@@ -1253,12 +1338,28 @@
             if(phys.grounded && !phys.wasGrounded) { phys.comboCount = 0; } 
             phys.wasGrounded = phys.grounded;
 
-            if(keys.jump && !phys.prevJump) {
+            // Salto con memoria: si pulsas un instante antes de tocar el suelo, el salto se hace al aterrizar
+            if (phys.grounded) phys.jumps = 0;
+            const saltoPulsado = keys.jump && !phys.prevJump;
+            if (saltoPulsado) phys.bufferSalto = 8;
+            if (phys.bufferSalto > 0) {
+                phys.bufferSalto -= GAME_SPEED;
                 let jumpFuerza = (phys.power === 'super') ? 22 : 18;
                 if(pStats.id === 'carlos') jumpFuerza *= 1.30;
-                if(phys.grounded) { playerBody.velocity.y = jumpFuerza; phys.jumps = 1; spawnParticulas(px, phys.y, 0x888888); phys.coyote = 0; playSound('jump'); }
-                else if(phys.jumps < pStats.maxJumps) { playerBody.velocity.y = jumpFuerza * 0.85; phys.jumps++; spawnParticulas(px + phys.w/2, phys.y, 0x00FFCC); playSound('jump'); }
-            } phys.prevJump = keys.jump;
+                if(phys.grounded) {
+                    playerBody.velocity.y = jumpFuerza; phys.jumps = 1; phys.bufferSalto = 0; phys.enSalto = true;
+                    spawnParticulas(px, phys.y, 0x888888); phys.coyote = 0; playSound('jump');
+                } else if (saltoPulsado && phys.jumps < pStats.maxJumps) {
+                    playerBody.velocity.y = jumpFuerza * 0.85; phys.jumps++; phys.bufferSalto = 0; phys.enSalto = true;
+                    spawnParticulas(px + phys.w/2, phys.y, 0x00FFCC); playSound('jump');
+                }
+            }
+            // Salto variable: soltar el botón pronto corta la subida
+            if (phys.enSalto && !keys.jump && playerBody.velocity.y > 0) { playerBody.velocity.y *= 0.5; phys.enSalto = false; }
+            if (phys.grounded && playerBody.velocity.y <= 0) phys.enSalto = false;
+            // Si caes de una plataforma sin saltar, ya has usado el primer salto (el doble salto de Narci no sobra)
+            if (!phys.grounded && phys.jumps === 0) phys.jumps = 1;
+            phys.prevJump = keys.jump;
 
             if(phys.dashCooldown > 0) phys.dashCooldown -= GAME_SPEED;
             if(phys.dashTime > 0) {
@@ -1320,21 +1421,7 @@
 
             playerWrapper.position.set(playerBody.position.x, phys.y, 0);
 
-            if(Math.abs(phys.vx) > 0.5 && phys.grounded) { 
-                phys.animTime += 0.5 * GAME_SPEED; 
-                let o = Math.sin(phys.animTime) * 0.9; 
-                if(animNodes.legL) { 
-                    animNodes.legL.rotation.x = o; 
-                    animNodes.legR.rotation.x = -o; 
-                    animNodes.armL.rotation.x = -o; 
-                    if(!phys.isFishing) animNodes.armR.rotation.x = o; 
-                } 
-            } else if (!phys.grounded && animNodes.legL) { 
-                animNodes.legL.rotation.x = -0.5; 
-                animNodes.legR.rotation.x = 0.5; 
-                animNodes.armL.rotation.x = 2.5; 
-                if(!phys.isFishing) animNodes.armR.rotation.x = 2.5; 
-            }
+            animarPersonaje();
 
             for(let i = balas.length-1; i >= 0; i--) {
                 let b = balas[i];
@@ -1607,7 +1694,6 @@
             const lookAtZ = camTargetZ + dirZ * 2;
             camera.lookAt(lookAtX, lookAtY, lookAtZ);
 
-            renderer.render(scene, camera);
         }
     </script>
 </body>
