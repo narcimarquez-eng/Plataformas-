@@ -779,44 +779,48 @@
             });
         }
 
-        // ⚡ Lago 3D: cuenca con profundidad, superficie que ondula y espuma en el borde
+        // ⚡ Lago hundido: el agua va dentro de una cuenca con los mismos materiales que las pasarelas, superficie que ondula y espuma en el fondo
         const lagosAnimados = [];
         let tiempoAgua = 0;
-        function crearLagoTresD(x, y, z, ancho, fData) {
-            const prof = 9;
+        function crearLagoTresD(xL, xR, cy, fIndex, fData) {
+            const hz = 3.75, gap = xR - xL, xc = (xL + xR) / 2;
+            let ondaMinima = Infinity; // el agua queda por debajo del punto más bajo de la orilla
+            for (let i = 0; i <= 8; i++) ondaMinima = Math.min(ondaMinima, calcularOnda(xL + gap * i / 8));
+            const nivel = cy + ondaMinima - 2.2; // superficie del agua
+            const fondo = nivel - 2.5;
             const grupo = new THREE.Group();
-            grupo.position.set(x, y, z);
-            // cuenca: el fondo se hunde hacia el centro
-            const geoCuenca = new THREE.PlaneGeometry(ancho, prof, 14, 6);
-            const pc = geoCuenca.attributes.position;
-            for (let i = 0; i < pc.count; i++) {
-                const u = pc.getX(i) / (ancho / 2), v = pc.getY(i) / (prof / 2);
-                pc.setZ(i, -2.2 * Math.max(0, 1 - (u * u + v * v) * 0.6));
+            grupo.position.set(xc, 0, 0);
+            // fondo de la cuenca, oscuro bajo el agua
+            const cuenca = new THREE.Mesh(new THREE.PlaneGeometry(gap, hz * 2), new THREE.MeshStandardMaterial({ color: new THREE.Color(fData.aguaColor).multiplyScalar(0.4), roughness: 0.9 }));
+            cuenca.rotation.x = -Math.PI / 2; cuenca.position.y = fondo; grupo.add(cuenca);
+            // muro del fondo: segmentos inclinados como las pasarelas, con hierba arriba y tierra abajo
+            const numSeg = Math.max(3, Math.floor(gap / 2)), segW = gap / numSeg;
+            for (let i = 0; i < numSeg; i++) {
+                const xa = xL + i * segW, xb = xa + segW;
+                const ya = cy + calcularOnda(xa), yb = cy + calcularOnda(xb);
+                const yMedio = (ya + yb) / 2, angulo = Math.atan2(yb - ya, segW), px = xa + segW / 2 - xc;
+                const cesped = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.05, 1.5, 1.5), matFases[fIndex].top);
+                cesped.position.set(px, yMedio - 0.75, -hz - 0.75); cesped.rotation.z = angulo; cesped.receiveShadow = true; grupo.add(cesped);
+                const tierra = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.05, yMedio - 1.5 - fondo, 1.5), matFases[fIndex].bot);
+                tierra.position.set(px, (yMedio - 1.5 + fondo) / 2, -hz - 0.75); tierra.receiveShadow = true; grupo.add(tierra);
             }
-            geoCuenca.computeVertexNormals();
-            const cuenca = new THREE.Mesh(geoCuenca, new THREE.MeshStandardMaterial({ color: new THREE.Color(fData.aguaColor).multiplyScalar(0.4), roughness: 0.9 }));
-            cuenca.rotation.x = -Math.PI / 2;
-            cuenca.position.y = -0.15;
-            grupo.add(cuenca);
+            // borde delantero: bajo, para que el agua se vea desde la cámara
+            const bordeTop = nivel + 1.0;
+            const bordeCesped = new THREE.Mesh(new THREE.BoxGeometry(gap, 0.8, 1.5), matFases[fIndex].top);
+            bordeCesped.position.set(0, bordeTop - 0.4, hz - 0.75); bordeCesped.receiveShadow = true; grupo.add(bordeCesped);
+            const bordeTierra = new THREE.Mesh(new THREE.BoxGeometry(gap, bordeTop - 0.8 - fondo, 1.5), matFases[fIndex].bot);
+            bordeTierra.position.set(0, (bordeTop - 0.8 + fondo) / 2, hz - 0.75); bordeTierra.receiveShadow = true; grupo.add(bordeTierra);
             // superficie: ondula y deja ver el fondo
-            const geoAgua = new THREE.PlaneGeometry(ancho, prof, 24, 8);
+            const geoAgua = new THREE.PlaneGeometry(gap, hz * 2, 24, 8);
             const baseAgua = geoAgua.attributes.position.array.slice();
             const superficie = new THREE.Mesh(geoAgua, new THREE.MeshStandardMaterial({ color: fData.aguaColor, emissive: fData.aguaGlow, emissiveIntensity: 0.35, map: texAgua, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.8, depthWrite: false }));
-            superficie.rotation.x = -Math.PI / 2;
-            grupo.add(superficie);
-            // espuma en el borde
-            const espuma = [];
-            const tiras = [[0, prof / 2, ancho, 0.4], [0, -prof / 2, ancho, 0.4], [ancho / 2, 0, 0.4, prof], [-ancho / 2, 0, 0.4, prof]];
-            for (const [px, pz, sx, sz] of tiras) {
-                const m = new THREE.Mesh(new THREE.PlaneGeometry(sx, sz), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }));
-                m.rotation.x = -Math.PI / 2;
-                m.position.set(px, 0.14, pz);
-                grupo.add(m);
-                espuma.push(m);
-            }
-            registrarEntorno(grupo, null, x);
-            lagosAnimados.push({ grupo, superficie, baseAgua, espuma, fase: Math.random() * 6 });
-            return grupo;
+            superficie.rotation.x = -Math.PI / 2; superficie.position.y = nivel; grupo.add(superficie);
+            // espuma donde el agua toca el muro del fondo
+            const espuma = new THREE.Mesh(new THREE.PlaneGeometry(gap, 0.6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }));
+            espuma.rotation.x = -Math.PI / 2; espuma.position.set(0, nivel + 0.05, -hz + 0.3); grupo.add(espuma);
+            registrarEntorno(grupo, null, xc);
+            lagosAnimados.push({ grupo, superficie, baseAgua, espuma: [espuma], fase: Math.random() * 6 });
+            return nivel;
         }
         function actualizarLagos() {
             tiempoAgua += GAME_SPEED / 60;
@@ -1166,23 +1170,23 @@
                         
                         let mont = clonarYTintar(montanaKey, fData); 
                         if(mont) { 
-                            colocarMontana(mont, montanaKey, cx + gap/2, alturaColinaFondo(cx + gap/2, -60), -60);
+                            colocarMontana(mont, montanaKey, cx + gap/2, alturaColinaFondo(cx + gap/2, -40), -40);
                             
                             let luzCanyon = new THREE.PointLight(fData.aguaColor, 25, 70);
-                            luzCanyon.position.set(0, 12, 39); // la montaña queda al fondo: la luz se acerca al lago
+                            luzCanyon.position.set(0, 12, 26); // la luz queda junto al lago, delante de la montaña
                             mont.add(luzCanyon);
                             
                             registrarEntorno(mont, null, cx + gap/2); 
                         } 
                         
-                        crearLagoTresD(cx + gap/2, cy - 2.5, -2, anchoLago + 4, fData);
+                        const nivelLago = crearLagoTresD(cx, cx + gap, cy, f, fData);
 
                         // ⚡ Efectos animados de agua (niebla, burbujas, salpicaduras)
                         // Se colocan ligeramente por encima del lago para que las
                         // burbujas nazcan desde la superficie.
                         const efectos = crearEfectosAgua(
-                            cx + gap/2, cy - 2.0, -2,
-                            (anchoLago + 4) * 0.5, 8, fData
+                            cx + gap/2, nivelLago + 0.5, 0,
+                            gap * 0.5, 8, fData
                         );
                         registrarEntorno(efectos.grupo, null, cx + gap/2);
                     }
