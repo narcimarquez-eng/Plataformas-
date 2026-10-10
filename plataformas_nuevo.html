@@ -340,7 +340,7 @@
 
         let gameState = 'menu', score = 0, lives = 5, bloquesInventario = 0, ultimoBloque = 0, fishingCooldown = 0, gemasRecogidas = 0;
         let pStats = { id: '', ammo: '', maxJumps: 1, speed: 0.38, projDmg: 1, projSpeed: 0.25, projLife: 70, ammoTex: null, ammoMat: null, ammoGeo: null };
-        let phys = { x: 0, y: 5, vx: 0, vy: 0, w: 1.2, h: 2.2, grounded: false, jumps: 0, prevJump: false, prevAct: false, prevFish: false, dir: 1, power: 'normal', invuln: 0, animTime: 0, prevDash: false, dashCooldown: 0, dashTime: 0, dashTrailTimer: 0, wasGrounded: true, comboCount: 0, comboTimer: 0, coyote: 0, isFishing: false, bufferSalto: 0, enSalto: false };
+        let phys = { x: 0, y: 5, vx: 0, vy: 0, w: 1.2, h: 2.2, grounded: false, jumps: 0, prevJump: false, prevAct: false, prevFish: false, dir: 1, power: 'normal', invuln: 0, animTime: 0, prevDash: false, dashCooldown: 0, dashTime: 0, dashTrailTimer: 0, wasGrounded: true, comboCount: 0, comboTimer: 0, coyote: 0, isFishing: false, bufferSalto: 0, enSalto: false, rebote: 0 };
         let faseActual = 0, puntosInicioFase = [], scoreAlIniciarFase = 0; let gemas = [];
         const combNode = document.getElementById('combo-alert');
 
@@ -720,8 +720,8 @@
                 const clave = 'montana_' + fData.montanas[Math.floor(Math.random() * fData.montanas.length)];
                 const mont = crearMontanaLejana(clave, fData);
                 if (!mont) continue;
-                const xm = x + (Math.random() - 0.5) * 6, z = -60 + (Math.random() - 0.5) * 16;
-                colocarMontana(mont, clave, xm, alturaColinaFondo(xm, z), z, 0.9 + Math.random() * 0.3);
+                const xm = x + (Math.random() - 0.5) * 6, z = -45 + (Math.random() - 0.5) * 16;
+                colocarMontana(mont, clave, xm, alturaColinaFondo(xm, z), z, 0.85 + Math.random() * 0.25);
                 registrarEntorno(mont, null, xm);
             }
         }
@@ -1037,7 +1037,9 @@
                 body.position.set(posX, cy + hMedio - 0.75, 0); 
                 body.quaternion.setFromAxisAngle(new CANNON.Vec3(0,0,1), anguloInclinacion);
                 registrarEntorno(meshTop, body, posX, true, segW*1.05, 1.5, cy + hMedio - 1.5); 
-                registrarEntorno(meshBot, null, posX);
+                const bodyBot = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3((segW*1.05)/2, 20, 3.25)), material: matFisicas });
+                bodyBot.position.set(posX, cy + hMedio - 1.5 - 20.1, 0); // su cima queda bajo la losa: no asoma por encima en pendientes
+                registrarEntorno(meshBot, bodyBot, posX);
                 
                 if (decorado && fData) {
                     const numMatojos = 2 + Math.floor(Math.random() * 3);
@@ -1227,7 +1229,7 @@
                             montanasLago.push({ mont, clave: montanaKey, x: cx + gap/2 });
                             
                             let luzCanyon = new THREE.PointLight(fData.aguaColor, 12, 12); // solo ilumina el agua del lago
-                            luzCanyon.position.set(0, 12, 48); // la luz queda junto al lago, delante de la montaña
+                            luzCanyon.position.set(0, 12, 39); // la luz queda junto al lago, delante de la montaña
                             mont.add(luzCanyon);
                             
                             registrarEntorno(mont, null, cx + gap/2); 
@@ -1373,7 +1375,7 @@
                 if (f < configFases.length - 1) { crearTerrenoOndulado(cx, 20, cy, f, fData, true); cx += 20; }
             }
             if (!colinasFondo) { colinasFondo = crearColinasFondo(-600, cx + 400); plantarHierbaColinas(-60, cx + 60); }
-            for (const m of montanasLago) colocarMontana(m.mont, m.clave, m.x, alturaColinaFondo(m.x, -60), -60, 1.2);
+            for (const m of montanasLago) colocarMontana(m.mont, m.clave, m.x, alturaColinaFondo(m.x, -45), -45, 1.1);
             plantarCadenaMontanas(-40, cx + 40);
         }
 
@@ -1599,7 +1601,7 @@
                 playerWrapper.rotation.y = sentido > 0 ? Math.PI / 2 : -Math.PI / 2;
             }
 
-            if (phys.invuln < 70) { playerBody.velocity.x += (targetVx - playerBody.velocity.x) * 0.2; }
+            if (phys.invuln < 70 && phys.rebote <= 0) { playerBody.velocity.x += (targetVx - playerBody.velocity.x) * 0.2; }
 
             let isGrounded = false;
             for (let i = 0; i < world.contacts.length; i++) { let c = world.contacts[i]; if (c.bi === playerBody || c.bj === playerBody) { if (c.bi === playerBody && c.ni.y < -0.2) isGrounded = true; if (c.bj === playerBody && c.ni.y > 0.2) isGrounded = true; } }
@@ -1685,7 +1687,14 @@
                 }
             } phys.prevFish = keys.fish;
 
+            const vxAntesChoque = playerBody.velocity.x;
             world.step((1 / 60) * GAME_SPEED);
+            for (const c of world.contacts) {
+                if (c.bi !== playerBody && c.bj !== playerBody) continue;
+                const nx = c.bi === playerBody ? -c.ni.x : c.ni.x; // normal de la pared hacia el héroe
+                if (Math.abs(nx) > 0.7 && vxAntesChoque * nx < -1) { playerBody.velocity.x = -vxAntesChoque * 0.35; phys.rebote = 12; break; }
+            }
+            if (phys.rebote > 0) phys.rebote -= GAME_SPEED;
 
             phys.vx = playerBody.velocity.x; phys.vy = playerBody.velocity.y; phys.x = playerBody.position.x - 0.6; phys.y = playerBody.position.y - 0.6;
             if (faseActual < configFases.length - 1 && phys.x >= puntosInicioFase[faseActual + 1]) { faseActual++; setEntornoFase(faseActual); scoreAlIniciarFase = score; }
