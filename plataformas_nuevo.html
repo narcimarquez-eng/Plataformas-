@@ -694,21 +694,47 @@
 
         // Montañas apoyadas en el valle (bajo el nivel del lago) en vez de flotar
         const bboxMontanas = {};
-        function colocarMontana(mont, clave, x, cyBase, z) {
-            const escala = 1.5;
+        function colocarMontana(mont, clave, x, cyBase, z, escala = 1.5) {
             if (!bboxMontanas[clave]) bboxMontanas[clave] = new THREE.Box3().setFromObject(mCargados[clave]);
             mont.scale.setScalar(escala);
             const baseY = bboxMontanas[clave].isEmpty() ? 0 : bboxMontanas[clave].min.y;
             mont.position.set(x, cyBase - 3 - baseY * escala, z);
         }
 
+        // Cadena de montañas al fondo: una línea continua de montañas de cada fase, con niebla, que cierra el horizonte
+        function crearMontanaLejana(clave, fData) {
+            if (!mCargados[clave]) return null;
+            const mont = mCargados[clave].clone();
+            mont.traverse(c => {
+                if (!c.isMesh) return;
+                if (c.name === 'rio' || c.name === 'poza_agua' || c.name.startsWith('espuma')) c.visible = false;
+                else c.material = materialTintado(c.material, fData, 0.35);
+            });
+            return mont;
+        }
+        function plantarCadenaMontanas(xIni, xFin) {
+            for (let x = xIni; x < xFin; x += 20 + Math.random() * 8) {
+                let f = 0;
+                for (let i = 0; i < configFases.length; i++) if (x >= puntosInicioFase[i]) f = i;
+                const fData = configFases[f];
+                const clave = 'montana_' + fData.montanas[Math.floor(Math.random() * fData.montanas.length)];
+                const mont = crearMontanaLejana(clave, fData);
+                if (!mont) continue;
+                const xm = x + (Math.random() - 0.5) * 6, z = -100 + (Math.random() - 0.5) * 16;
+                colocarMontana(mont, clave, xm, alturaColinaFondo(xm, z), z, 1.4 + Math.random() * 0.5);
+                registrarEntorno(mont, null, xm);
+            }
+        }
+
         // ⚡ Colinas de fondo: la misma hierba y tierra que las plataformas, detrás del nivel
         function alturaColinaFondo(x, z) {
-            // Junto a las plataformas el terreno queda hundido (oculto tras el nivel) y sube poco a poco hacia el horizonte: sin escalón visible
-            const t = Math.min(1, Math.max(0, (-z - 8) / 200));
+            // Hundido junto a las plataformas (oculto tras el nivel), colinas verdes a media distancia y una bajada suave al fondo
+            const suave = (a, b, v) => { const k = Math.min(1, Math.max(0, (v - a) / (b - a))); return k * k * (3 - 2 * k); };
+            const t = Math.min(1, Math.max(0, (-z - 8) / 120));
+            const base = -12 + 14 * suave(0.08, 0.5, t) - 4 * suave(0.7, 1, t);
             const ondas = 2.2 * Math.sin(x * 0.0125 + 0.9) + 1.2 * Math.sin(x * 0.031 + 2.3)
                 + 0.7 * Math.sin(x * 0.077 + 0.4) + 0.6 * Math.sin(z * 0.21 + x * 0.006);
-            return -12 + 12 * Math.pow(t, 1.5) + ondas * (0.2 + 0.3 * t) * 1.2;
+            return base + ondas * (0.6 + 0.5 * t);
         }
         let colinasFondo = null, frentesFondo = [];
         function crearColinasFondo(xIni, xFin) {
@@ -766,7 +792,7 @@
                 const malla = new THREE.InstancedMesh(geoMatojo, mat, porMaterial);
                 for (let k = 0; k < porMaterial; k++) {
                     const x = xIni + Math.random() * (xFin - xIni);
-                    const z = -14 - Math.random() * 30;
+                    const z = -40 - Math.random() * 50;
                     const ancho = 0.05 + Math.random() * 0.07, alto = 0.25 + Math.random() * 0.5;
                     mundo.position.set(x, alturaColinaFondo(x, z) + alto / 2 - 0.1, z);
                     mundo.rotation.set((Math.random() - 0.5) * 0.4, Math.random() * Math.PI, (Math.random() - 0.5) * 0.4);
@@ -1318,6 +1344,7 @@
                 if (f < configFases.length - 1) { crearTerrenoOndulado(cx, 20, cy, f, fData, true); cx += 20; }
             }
             if (!colinasFondo) { colinasFondo = crearColinasFondo(-600, cx + 400); plantarHierbaColinas(-60, cx + 60); }
+            plantarCadenaMontanas(-40, cx + 40);
         }
 
         function colocarBloque() {
@@ -1401,10 +1428,16 @@
 
         function checkColl(ax, ay, aw, ah, bx, by, bw, bh) { return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by; }
 
-        // Reaparición en tierra firme: el centro de la pasarela más cercana a la última pisada (plano, sin bordes), con el hueco libre encima
+        // Tierra firme: pasarela bajo x y también a 4 unidades a cada lado, para no resbalar hacia el hueco
+        function tierraFirme(x, y) {
+            const hay = (xx) => plataformas.some(q => xx > q.x && xx < q.x + q.w && Math.abs(q.y + q.h - y) < 3);
+            return hay(x - 4) && hay(x) && hay(x + 4);
+        }
+        // Reaparición: el centro de la pasarela más cercana a la última pisada, en tierra firme y con el hueco libre encima
         function puntoDeRescate() {
             const candidatos = plataformas.map(p => ({ p, x: p.x + p.w / 2, y: p.y + p.h, d: Math.abs(p.x + p.w / 2 - lastSafeX) })).sort((a, b) => a.d - b.d);
-            return candidatos.find(c => !plataformas.some(q => q !== c.p && c.x > q.x && c.x < q.x + q.w && q.y < c.y + 4 && q.y + q.h > c.y - 0.5)) || null;
+            const libre = c => !plataformas.some(q => q !== c.p && c.x > q.x && c.x < q.x + q.w && q.y < c.y + 4 && q.y + q.h > c.y - 0.5);
+            return candidatos.find(c => tierraFirme(c.x, c.y) && libre(c)) || null;
         }
 
         function takeDamage(reboundX=0) {
@@ -1626,7 +1659,7 @@
 
             phys.vx = playerBody.velocity.x; phys.vy = playerBody.velocity.y; phys.x = playerBody.position.x - 0.6; phys.y = playerBody.position.y - 0.6;
             if (faseActual < configFases.length - 1 && phys.x >= puntosInicioFase[faseActual + 1]) { faseActual++; setEntornoFase(faseActual); scoreAlIniciarFase = score; }
-            if(phys.grounded) { lastSafeX = phys.x; lastSafeY = phys.y; } 
+            if(phys.grounded && tierraFirme(phys.x, phys.y)) { lastSafeX = phys.x; lastSafeY = phys.y; }
             if(phys.y < -20) {
                 const rescate = puntoDeRescate();
                 if (rescate) { lastSafeX = rescate.x; lastSafeY = rescate.y; }
