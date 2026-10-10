@@ -701,7 +701,28 @@
             mont.position.set(x, cyBase - 3 - baseY * escala, z);
         }
 
-        // Cadena de montañas al fondo: una línea continua de montañas de cada fase, con niebla, que cierra el horizonte
+        // Cascada del lago: cae desde la cima de la montaña y entra en el agua, delante del muro del fondo
+        function crearCascadaLago(xc, yAlto, yAgua, fData) {
+            const alto = yAlto - yAgua;
+            if (alto < 1) return null; // la montaña no llega al agua por encima del lago
+            const grupo = new THREE.Group();
+            [[-3.35, 0.6], [-3.6, 0.85]].forEach(([z, opacidad]) => {
+                const textura = texCascada.clone();
+                textura.needsUpdate = true;
+                textura.wrapS = THREE.RepeatWrapping; textura.wrapT = THREE.RepeatWrapping;
+                textura.repeat.set(1, 3);
+                const mat = new THREE.MeshStandardMaterial({ color: fData.aguaColor, map: textura, emissive: fData.aguaGlow, emissiveIntensity: 0.8, transparent: true, opacity: opacidad, roughness: 0.15, depthWrite: false, side: THREE.DoubleSide });
+                const lamina = new THREE.Mesh(new THREE.PlaneGeometry(4.2, alto), mat);
+                lamina.position.set(0, yAgua + alto / 2, z);
+                lamina.renderOrder = 3;
+                grupo.add(lamina);
+                riosAnimados.push(lamina);
+            });
+            grupo.position.x = xc;
+            registrarEntorno(grupo, null, xc);
+            return grupo;
+        }
+
         function crearMontanaLejana(clave, fData) {
             if (!mCargados[clave]) return null;
             const mont = mCargados[clave].clone();
@@ -1226,16 +1247,16 @@
                         
                         let mont = clonarYTintar(montanaKey, fData); 
                         if(mont) { 
-                            montanasLago.push({ mont, clave: montanaKey, x: cx + gap/2 });
                             
                             let luzCanyon = new THREE.PointLight(fData.aguaColor, 12, 12); // solo ilumina el agua del lago
-                            luzCanyon.position.set(0, 12, 39); // la luz queda junto al lago, delante de la montaña
+                            luzCanyon.position.set(0, 12, 23); // la luz queda junto al lago, delante de la montaña
                             mont.add(luzCanyon);
                             
                             registrarEntorno(mont, null, cx + gap/2); 
                         } 
                         
                         const nivelLago = crearLagoTresD(cx, cx + gap, cyAnterior, cy, f, fData);
+                        if (mont) montanasLago.push({ mont, clave: montanaKey, x: cx + gap/2, nivel: nivelLago, fData });
 
                         // ⚡ Efectos animados de agua (niebla, burbujas, salpicaduras)
                         // Se colocan ligeramente por encima del lago para que las
@@ -1375,7 +1396,11 @@
                 if (f < configFases.length - 1) { crearTerrenoOndulado(cx, 20, cy, f, fData, true); cx += 20; }
             }
             if (!colinasFondo) { colinasFondo = crearColinasFondo(-600, cx + 400); plantarHierbaColinas(-60, cx + 60); }
-            for (const m of montanasLago) colocarMontana(m.mont, m.clave, m.x, alturaColinaFondo(m.x, -45), -45, 1.1);
+            for (const m of montanasLago) {
+                colocarMontana(m.mont, m.clave, m.x, alturaColinaFondo(m.x, -27), -27, 1.1);
+                m.mont.traverse(c => { if (c.name === 'rio' || c.name.startsWith('espuma_cascada_')) c.visible = false; });
+                crearCascadaLago(m.x, new THREE.Box3().setFromObject(m.mont).max.y - 1, m.nivel, m.fData);
+            }
             plantarCadenaMontanas(-40, cx + 40);
         }
 
