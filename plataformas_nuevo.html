@@ -222,7 +222,9 @@
 
         function createTextTexture(text) { const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#FFF'; ctx.font = '80px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 64, 70); return new THREE.CanvasTexture(canvas); }
         function crearTexturaAgua() { const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 512; const ctx = canvas.getContext('2d'); const grad = ctx.createLinearGradient(0,0,0,512); grad.addColorStop(0, '#FFFFFF'); grad.addColorStop(0.5, '#AAAAAA'); grad.addColorStop(1, '#FFFFFF'); ctx.fillStyle = grad; ctx.fillRect(0, 0, 128, 512); ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; for (let i = 0; i < 80; i++) ctx.fillRect(Math.random()*128, Math.random()*512, 2, 10 + Math.random()*50); const texture = new THREE.CanvasTexture(canvas); texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(2, 3); return texture; }
-        function crearCieloGradient(colors) { const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256; const ctx = canvas.getContext('2d'); const grad = ctx.createLinearGradient(0,0,0,256); grad.addColorStop(0, colors[0]); grad.addColorStop(0.5, colors[1]); grad.addColorStop(1, colors[2]); ctx.fillStyle = grad; ctx.fillRect(0, 0, 256, 256); for(let i=0; i<150; i++) { ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.3 + Math.random()*0.5; ctx.fillRect(Math.random()*256, Math.random()*100, 1.5, 1.5); } ctx.globalAlpha = 1.0; return new THREE.CanvasTexture(canvas); }
+        // Cielo en coordenadas de la cúpula: arriba el cenit, en el centro el horizonte (color de la niebla), abajo el nadir
+        function crearCieloGradient(fase) { const canvas = document.createElement('canvas'); canvas.width = 2048; canvas.height = 512; const ctx = canvas.getContext('2d'); const grad = ctx.createLinearGradient(0,0,0,512); grad.addColorStop(0, fase.skyC[0]); grad.addColorStop(0.39, fase.skyC[0]); grad.addColorStop(0.5, '#' + fase.fog.toString(16).padStart(6, '0')); grad.addColorStop(0.61, fase.skyC[2]); grad.addColorStop(1, fase.skyC[2]); ctx.fillStyle = grad; ctx.fillRect(0, 0, 2048, 512); for(let i=0; i<600; i++) { ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.3 + Math.random()*0.5; ctx.fillRect(Math.random()*2048, 190 + Math.random()*60, 2, 1); } ctx.globalAlpha = 1.0; const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; return tex; }
+        function aplicarCielo(index) { const viejo = cieloDomo.material.map; cieloDomo.material.map = crearCieloGradient(configFases[index]); cieloDomo.material.needsUpdate = true; if (viejo) viejo.dispose(); }
 
         // ⚡ Textura de cascada: rayas verticales que se desplazan para dar la sensación de caída
         function crearTexturaCascada() {
@@ -343,7 +345,10 @@
         const combNode = document.getElementById('combo-alert');
 
         const scene = new THREE.Scene();
-        scene.background = crearCieloGradient(configFases[0].skyC); scene.fog = new THREE.FogExp2(configFases[0].fog, 0.008);
+        scene.fog = new THREE.FogExp2(configFases[0].fog, 0.008);
+        // Cielo: cúpula que sigue a la cámara. Su horizonte es el color de la niebla, así el fondo lejano se funde con el cielo sin borde
+        const cieloDomo = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 24), new THREE.MeshBasicMaterial({ side: THREE.BackSide, depthWrite: false, fog: false }));
+        cieloDomo.renderOrder = -1; scene.add(cieloDomo); aplicarCielo(0);
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1500);
         const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(window.devicePixelRatio > 1 ? 1.2 : 1.0); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -690,58 +695,31 @@
         // Montañas apoyadas en el valle (bajo el nivel del lago) en vez de flotar
         const bboxMontanas = {};
         function colocarMontana(mont, clave, x, cyBase, z) {
-            const escala = 1.2;
+            const escala = 1.5;
             if (!bboxMontanas[clave]) bboxMontanas[clave] = new THREE.Box3().setFromObject(mCargados[clave]);
             mont.scale.setScalar(escala);
             const baseY = bboxMontanas[clave].isEmpty() ? 0 : bboxMontanas[clave].min.y;
             mont.position.set(x, cyBase - 3 - baseY * escala, z);
         }
 
-        // Cordillera continua al fondo: une montañas, horizonte y cielo en una sola silueta
-        let cordillera = null;
-        function crearCordilleraFondo() {
-            const ancho = 2048, alto = 512;
-            const canvas = document.createElement('canvas');
-            canvas.width = ancho; canvas.height = alto;
-            const g = canvas.getContext('2d');
-            const degradado = g.createLinearGradient(0, 120, 0, alto);
-            degradado.addColorStop(0, 'rgba(255,255,255,1)');
-            degradado.addColorStop(1, 'rgba(255,255,255,0)');
-            g.fillStyle = degradado;
-            g.beginPath();
-            g.moveTo(0, alto);
-            for (let x = 0; x <= ancho; x += 4) {
-                const t = (x / ancho) * Math.PI * 2; // frecuencias enteras: el patrón encaja al repetirse
-                g.lineTo(x, 210 - 60 * Math.sin(3 * t + 0.7) - 35 * Math.sin(7 * t + 2.1) - 15 * Math.sin(13 * t + 4.0));
-            }
-            g.lineTo(ancho, alto);
-            g.closePath();
-            g.fill();
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.wrapS = THREE.RepeatWrapping;
-            tex.repeat.set(7.5, 1);
-            const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, color: 0x335577 });
-            const malla = new THREE.Mesh(new THREE.PlaneGeometry(9000, 70), mat);
-            malla.position.set(2800, 2, -40);
-            scene.add(malla);
-            return malla;
-        }
-
         // ⚡ Colinas de fondo: la misma hierba y tierra que las plataformas, detrás del nivel
         function alturaColinaFondo(x, z) {
-            return 2 + 2.2 * Math.sin(x * 0.0125 + 0.9) + 1.2 * Math.sin(x * 0.031 + 2.3)
+            // Junto a las plataformas el terreno queda hundido (oculto tras el nivel) y sube poco a poco hacia el horizonte: sin escalón visible
+            const t = Math.min(1, Math.max(0, (-z - 8) / 200));
+            const ondas = 2.2 * Math.sin(x * 0.0125 + 0.9) + 1.2 * Math.sin(x * 0.031 + 2.3)
                 + 0.7 * Math.sin(x * 0.077 + 0.4) + 0.6 * Math.sin(z * 0.21 + x * 0.006);
+            return -12 + 12 * Math.pow(t, 1.5) + ondas * (0.2 + 0.3 * t) * 1.2;
         }
         let colinasFondo = null, frentesFondo = [];
         function crearColinasFondo(xIni, xFin) {
-            const pasoX = 4, zFrente = -8, zFondo = -20, pasosZ = 4, franja = 8;
+            const pasoX = 6, zFrente = -8, zFondo = -240, pasosZ = 18, franja = 8;
             const nX = Math.ceil((xFin - xIni) / pasoX);
             const pos = [], uv = [], col = [], indTop = [], indFrente = [];
             // superficie superior: hierba
             for (let i = 0; i <= nX; i++) {
                 const x = xIni + i * pasoX;
                 for (let j = 0; j <= pasosZ; j++) {
-                    const z = zFrente + (zFondo - zFrente) * j / pasosZ;
+                    const z = zFrente + (zFondo - zFrente) * Math.pow(j / pasosZ, 1.7); // más filas cerca de las plataformas
                     pos.push(x, alturaColinaFondo(x, z), z);
                     uv.push(x / 4, z / 4);
                     col.push(1, 1, 1, 1);
@@ -788,7 +766,7 @@
                 const malla = new THREE.InstancedMesh(geoMatojo, mat, porMaterial);
                 for (let k = 0; k < porMaterial; k++) {
                     const x = xIni + Math.random() * (xFin - xIni);
-                    const z = -9 - Math.random() * 10;
+                    const z = -14 - Math.random() * 30;
                     const ancho = 0.05 + Math.random() * 0.07, alto = 0.25 + Math.random() * 0.5;
                     mundo.position.set(x, alturaColinaFondo(x, z) + alto / 2 - 0.1, z);
                     mundo.rotation.set((Math.random() - 0.5) * 0.4, Math.random() * Math.PI, (Math.random() - 0.5) * 0.4);
@@ -1154,7 +1132,6 @@
         }
 
         function generarTodaLaCampana() {
-            if (!cordillera) cordillera = crearCordilleraFondo();
             let cx = -5; let cy = 0;
             const enemigosBasicos = ['lobo_feroz', 'arana_gigante', 'arpia', 'ciclope', 'cobra_venenosa', 'demonio_abismo', 'gargola_piedra', 'gusano_sand', 'kraken_profundo_2', 'dragon_rojo_2'];
 
@@ -1189,10 +1166,10 @@
                         
                         let mont = clonarYTintar(montanaKey, fData); 
                         if(mont) { 
-                            colocarMontana(mont, montanaKey, cx + gap/2, alturaColinaFondo(cx + gap/2, -16), -16);
+                            colocarMontana(mont, montanaKey, cx + gap/2, alturaColinaFondo(cx + gap/2, -60), -60);
                             
                             let luzCanyon = new THREE.PointLight(fData.aguaColor, 25, 70);
-                            luzCanyon.position.set(0, 12, 2);
+                            luzCanyon.position.set(0, 12, 39); // la montaña queda al fondo: la luz se acerca al lago
                             mont.add(luzCanyon);
                             
                             registrarEntorno(mont, null, cx + gap/2); 
@@ -1336,7 +1313,7 @@
                 cx += 40; 
                 if (f < configFases.length - 1) { crearTerrenoOndulado(cx, 20, cy, f, fData, true); cx += 20; }
             }
-            if (!colinasFondo) { colinasFondo = crearColinasFondo(-60, cx + 60); plantarHierbaColinas(-60, cx + 60); }
+            if (!colinasFondo) { colinasFondo = crearColinasFondo(-600, cx + 400); plantarHierbaColinas(-60, cx + 60); }
         }
 
         function colocarBloque() {
@@ -1369,9 +1346,8 @@
         };
 
         function setEntornoFase(index) {
-            scene.background = crearCieloGradient(configFases[index].skyC); 
+            aplicarCielo(index);
             scene.fog.color.setHex(configFases[index].fog);
-            if (cordillera) cordillera.material.color.set(new THREE.Color(configFases[index].fog).lerp(new THREE.Color(0x4a3c7a), 0.7));
             if (colinasFondo) colinasFondo.material = [matFases[index].top, frentesFondo[index]];
             dirLight.color.setHex(configFases[index].aguaColor);
             let alertEl = document.getElementById('phase-alert'); 
@@ -1908,6 +1884,7 @@
             camera.position.y += (camTargetY + 4 - camera.position.y) * (0.08 * GAME_SPEED);
             camera.position.z += (cameraZoom - camera.position.z) * (0.1 * GAME_SPEED);
             camera.lookAt(camTargetX, camTargetY, -2);
+            cieloDomo.position.copy(camera.position);
 
         }
     </script>
