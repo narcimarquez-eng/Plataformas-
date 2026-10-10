@@ -720,26 +720,42 @@
                 const clave = 'montana_' + fData.montanas[Math.floor(Math.random() * fData.montanas.length)];
                 const mont = crearMontanaLejana(clave, fData);
                 if (!mont) continue;
-                const xm = x + (Math.random() - 0.5) * 6, z = -100 + (Math.random() - 0.5) * 16;
-                colocarMontana(mont, clave, xm, alturaColinaFondo(xm, z), z, 1.4 + Math.random() * 0.5);
+                const xm = x + (Math.random() - 0.5) * 6, z = -60 + (Math.random() - 0.5) * 16;
+                colocarMontana(mont, clave, xm, alturaColinaFondo(xm, z), z, 0.9 + Math.random() * 0.3);
                 registrarEntorno(mont, null, xm);
             }
         }
 
         // ⚡ Colinas de fondo: la misma hierba y tierra que las plataformas, detrás del nivel
+        // Altura de las pasarelas en cada columna del fondo (se muestrea al crear las colinas)
+        let sueloX0 = -600, sueloPaso = 6, sueloAlturas = [];
+        function alturaTerrenoPlataformas(x) {
+            // Nivel más bajo de las pasarelas cerca de x, menos 1: el fondo nunca asoma por encima del nivel
+            let bajo = Infinity, cercana = 0, dCercana = Infinity;
+            for (const p of plataformas) {
+                const cima = p.y + p.h;
+                if (x + 3 > p.x && x - 3 < p.x + p.w) bajo = Math.min(bajo, cima);
+                const d = Math.abs(p.x + p.w / 2 - x);
+                if (d < dCercana) { dCercana = d; cercana = cima; }
+            }
+            return (bajo === Infinity ? cercana : bajo) - 1;
+        }
         function alturaColinaFondo(x, z) {
-            // Hundido junto a las plataformas (oculto tras el nivel), colinas verdes a media distancia y una bajada suave al fondo
-            const suave = (a, b, v) => { const k = Math.min(1, Math.max(0, (v - a) / (b - a))); return k * k * (3 - 2 * k); };
-            const t = Math.min(1, Math.max(0, (-z - 8) / 120));
-            const base = -12 + 14 * suave(0.08, 0.5, t) - 4 * suave(0.7, 1, t);
+            // Fondo al mismo nivel que las pasarelas (así no flotan) y colinas que suben poco a poco hacia el fondo
+            const i = Math.min(sueloAlturas.length - 1, Math.max(0, Math.round((x - sueloX0) / sueloPaso)));
+            const suelo = sueloAlturas.length ? sueloAlturas[i] : -12;
+            const lejos = Math.min(1, Math.max(0, (-z - 8) / 40));
+            const subida = Math.min(4, Math.max(0, (-z - 8) * 0.06));
             const ondas = 2.2 * Math.sin(x * 0.0125 + 0.9) + 1.2 * Math.sin(x * 0.031 + 2.3)
                 + 0.7 * Math.sin(x * 0.077 + 0.4) + 0.6 * Math.sin(z * 0.21 + x * 0.006);
-            return base + ondas * (0.6 + 0.5 * t);
+            return suelo + subida + ondas * (0.15 + 0.6 * lejos);
         }
         let colinasFondo = null, frentesFondo = [];
         function crearColinasFondo(xIni, xFin) {
             const pasoX = 6, zFrente = -8, zFondo = -240, pasosZ = 18, franja = 8;
             const nX = Math.ceil((xFin - xIni) / pasoX);
+            sueloX0 = xIni; sueloPaso = pasoX; sueloAlturas = [];
+            for (let i = 0; i <= nX; i++) sueloAlturas.push(alturaTerrenoPlataformas(xIni + i * pasoX));
             const pos = [], uv = [], col = [], indTop = [], indFrente = [];
             // superficie superior: hierba
             for (let i = 0; i <= nX; i++) {
@@ -758,7 +774,7 @@
                     indTop.push(a, b, c, c, b, d);
                 }
             }
-            // cara frontal: hierba que se desvanece hacia el fondo
+            // cara frontal de tierra, tras el nivel
             const inicio = pos.length / 3;
             for (let i = 0; i <= nX; i++) {
                 const x = xIni + i * pasoX, h = alturaColinaFondo(x, zFrente);
@@ -778,7 +794,7 @@
             geo.addGroup(0, indTop.length, 0);
             geo.addGroup(indTop.length, indFrente.length, 1);
             geo.computeVertexNormals();
-            frentesFondo = matFases.map(f => { const m = f.top.clone(); m.vertexColors = true; m.transparent = true; return m; });
+            frentesFondo = matFases.map(f => f.bot.clone()); // cara frontal opaca de tierra: se ve entre las pasarelas
             const malla = new THREE.Mesh(geo, [matFases[0].top, frentesFondo[0]]);
             malla.receiveShadow = true;
             scene.add(malla);
@@ -792,7 +808,7 @@
                 const malla = new THREE.InstancedMesh(geoMatojo, mat, porMaterial);
                 for (let k = 0; k < porMaterial; k++) {
                     const x = xIni + Math.random() * (xFin - xIni);
-                    const z = -40 - Math.random() * 50;
+                    const z = -14 - Math.random() * 40;
                     const ancho = 0.05 + Math.random() * 0.07, alto = 0.25 + Math.random() * 0.5;
                     mundo.position.set(x, alturaColinaFondo(x, z) + alto / 2 - 0.1, z);
                     mundo.rotation.set((Math.random() - 0.5) * 0.4, Math.random() * Math.PI, (Math.random() - 0.5) * 0.4);
@@ -808,11 +824,20 @@
         // ⚡ Lago hundido: el agua va dentro de una cuenca con los mismos materiales que las pasarelas, superficie que ondula y espuma en el fondo
         const lagosAnimados = [];
         let tiempoAgua = 0;
-        function crearLagoTresD(xL, xR, cy, fIndex, fData) {
+        // Relleno de tierra bajo un hueco entre pasarelas: el vacío no deja ver el cielo
+        function rellenarHueco(xL, xR, topeY, fIndex, fData) {
+            const tierra = new THREE.Mesh(new THREE.BoxGeometry(xR - xL, 40, 14), matFases[fIndex].bot);
+            tierra.position.set((xL + xR) / 2, topeY - 20, -3.5);
+            tierra.receiveShadow = true;
+            registrarEntorno(tierra, null, (xL + xR) / 2);
+        }
+        function crearLagoTresD(xL, xR, cyIzq, cyDer, fIndex, fData) {
             const hz = 3.75, gap = xR - xL, xc = (xL + xR) / 2;
+            // Altura de la orilla en cada x: la pasarela izquierda sigue su nivel y la derecha el suyo
+            const alturaBorde = (x) => cyIzq + (cyDer - cyIzq) * (x - xL) / gap + calcularOnda(x);
             let ondaMinima = Infinity; // el agua queda por debajo del punto más bajo de la orilla
-            for (let i = 0; i <= 8; i++) ondaMinima = Math.min(ondaMinima, calcularOnda(xL + gap * i / 8));
-            const nivel = cy + ondaMinima - 2.2; // superficie del agua
+            for (let i = 0; i <= 8; i++) ondaMinima = Math.min(ondaMinima, alturaBorde(xL + gap * i / 8));
+            const nivel = ondaMinima - 2.2; // superficie del agua
             const fondo = nivel - 2.5;
             const grupo = new THREE.Group();
             grupo.position.set(xc, 0, 0);
@@ -823,7 +848,7 @@
             const numSeg = Math.max(3, Math.floor(gap / 2)), segW = gap / numSeg;
             for (let i = 0; i < numSeg; i++) {
                 const xa = xL + i * segW, xb = xa + segW;
-                const ya = cy + calcularOnda(xa), yb = cy + calcularOnda(xb);
+                const ya = alturaBorde(xa), yb = alturaBorde(xb);
                 const yMedio = (ya + yb) / 2, angulo = Math.atan2(yb - ya, segW), px = xa + segW / 2 - xc;
                 const cesped = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.05, 1.5, 1.5), matFases[fIndex].top);
                 cesped.position.set(px, yMedio - 0.75, -hz - 0.75); cesped.rotation.z = angulo; cesped.receiveShadow = true; grupo.add(cesped);
@@ -845,6 +870,7 @@
             const espuma = new THREE.Mesh(new THREE.PlaneGeometry(gap, 0.6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }));
             espuma.rotation.x = -Math.PI / 2; espuma.position.set(0, nivel + 0.05, -hz + 0.3); grupo.add(espuma);
             registrarEntorno(grupo, null, xc);
+            rellenarHueco(xL, xR, fondo - 0.3, fIndex, fData);
             lagosAnimados.push({ grupo, superficie, baseAgua, espuma: [espuma], fase: Math.random() * 6 });
             return nivel;
         }
@@ -1161,6 +1187,7 @@
           fn(nodes, t);
         }
 
+        const montanasLago = [];
         function generarTodaLaCampana() {
             let cx = -5; let cy = 0;
             const enemigosBasicos = ['lobo_feroz', 'arana_gigante', 'arpia', 'ciclope', 'cobra_venenosa', 'demonio_abismo', 'gargola_piedra', 'gusano_sand', 'kraken_profundo_2', 'dragon_rojo_2'];
@@ -1182,6 +1209,7 @@
                     let w = 15 + Math.random()*10; 
                     let gap = 4 + Math.random()*4 + fData.gapExtra; 
                     let escalon = Math.floor(Math.random() * 3) - 1; 
+                    const cyAnterior = cy;
                     cy += (escalon * 3.5); 
                     if(cy > 10) cy -= 5; 
                     if(cy < -6) cy += 5;
@@ -1196,16 +1224,16 @@
                         
                         let mont = clonarYTintar(montanaKey, fData); 
                         if(mont) { 
-                            colocarMontana(mont, montanaKey, cx + gap/2, alturaColinaFondo(cx + gap/2, -40), -40);
+                            montanasLago.push({ mont, clave: montanaKey, x: cx + gap/2 });
                             
-                            let luzCanyon = new THREE.PointLight(fData.aguaColor, 25, 70);
-                            luzCanyon.position.set(0, 12, 26); // la luz queda junto al lago, delante de la montaña
+                            let luzCanyon = new THREE.PointLight(fData.aguaColor, 12, 12); // solo ilumina el agua del lago
+                            luzCanyon.position.set(0, 12, 48); // la luz queda junto al lago, delante de la montaña
                             mont.add(luzCanyon);
                             
                             registrarEntorno(mont, null, cx + gap/2); 
                         } 
                         
-                        const nivelLago = crearLagoTresD(cx, cx + gap, cy, f, fData);
+                        const nivelLago = crearLagoTresD(cx, cx + gap, cyAnterior, cy, f, fData);
 
                         // ⚡ Efectos animados de agua (niebla, burbujas, salpicaduras)
                         // Se colocan ligeramente por encima del lago para que las
@@ -1217,6 +1245,7 @@
                         registrarEntorno(efectos.grupo, null, cx + gap/2);
                     }
                     
+                    if (!(i > 0 && i % 4 === 0)) rellenarHueco(cx, cx + gap, Math.min(cyAnterior + calcularOnda(cx), cy + calcularOnda(cx + gap)) - 5, f, fData);
                     crearTerrenoOndulado(cx + gap, w, cy, f, fData, true); 
                     let slotRoca = cx + gap + w - 4; 
                     let slotBloque = cx + gap + w/2;
@@ -1344,6 +1373,7 @@
                 if (f < configFases.length - 1) { crearTerrenoOndulado(cx, 20, cy, f, fData, true); cx += 20; }
             }
             if (!colinasFondo) { colinasFondo = crearColinasFondo(-600, cx + 400); plantarHierbaColinas(-60, cx + 60); }
+            for (const m of montanasLago) colocarMontana(m.mont, m.clave, m.x, alturaColinaFondo(m.x, -60), -60, 1.2);
             plantarCadenaMontanas(-40, cx + 40);
         }
 
