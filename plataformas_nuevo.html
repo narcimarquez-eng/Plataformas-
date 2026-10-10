@@ -1401,6 +1401,12 @@
 
         function checkColl(ax, ay, aw, ah, bx, by, bw, bh) { return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by; }
 
+        // Reaparición en tierra firme: el centro de la pasarela más cercana a la última pisada (plano, sin bordes), con el hueco libre encima
+        function puntoDeRescate() {
+            const candidatos = plataformas.map(p => ({ p, x: p.x + p.w / 2, y: p.y + p.h, d: Math.abs(p.x + p.w / 2 - lastSafeX) })).sort((a, b) => a.d - b.d);
+            return candidatos.find(c => !plataformas.some(q => q !== c.p && c.x > q.x && c.x < q.x + q.w && q.y < c.y + 4 && q.y + q.h > c.y - 0.5)) || null;
+        }
+
         function takeDamage(reboundX=0) {
             if(phys.invuln > 0) return;
             playSound('hurt');
@@ -1621,7 +1627,13 @@
             phys.vx = playerBody.velocity.x; phys.vy = playerBody.velocity.y; phys.x = playerBody.position.x - 0.6; phys.y = playerBody.position.y - 0.6;
             if (faseActual < configFases.length - 1 && phys.x >= puntosInicioFase[faseActual + 1]) { faseActual++; setEntornoFase(faseActual); scoreAlIniciarFase = score; }
             if(phys.grounded) { lastSafeX = phys.x; lastSafeY = phys.y; } 
-            if(phys.y < -20) { playerBody.position.set(lastSafeX, lastSafeY + 5, 0); playerBody.velocity.set(0,0,0); takeDamage(); }
+            if(phys.y < -20) {
+                const rescate = puntoDeRescate();
+                if (rescate) { lastSafeX = rescate.x; lastSafeY = rescate.y; }
+                playerBody.position.set(lastSafeX + 0.6, lastSafeY + 3.6, 0); playerBody.velocity.set(0,0,0);
+                phys.x = lastSafeX; phys.y = lastSafeY + 3; // el paso siguiente activa las pasarelas de aquí, no las de la caída
+                takeDamage();
+            }
 
             playerWrapper.position.set(playerBody.position.x, phys.y, 0);
 
