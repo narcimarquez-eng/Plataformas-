@@ -826,7 +826,7 @@
         let tiempoAgua = 0;
         // Relleno de tierra bajo un hueco entre pasarelas: el vacío no deja ver el cielo
         function rellenarHueco(xL, xR, topeY, fIndex, fData) {
-            const tierra = new THREE.Mesh(new THREE.BoxGeometry(xR - xL, 40, 14), matFases[fIndex].bot);
+            const tierra = new THREE.Mesh(new THREE.BoxGeometry(xR - xL + 1, 40, 14), matFases[fIndex].bot); // medio metro bajo cada borde: sin rendijas
             tierra.position.set((xL + xR) / 2, topeY - 20, -3.5);
             tierra.receiveShadow = true;
             registrarEntorno(tierra, null, (xL + xR) / 2);
