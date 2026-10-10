@@ -33,7 +33,7 @@
         #combo-alert.show { opacity: 1; transform: scale(1.1); }
         #cartel-caida { position: absolute; top: 30%; left: 50%; transform: translate(-50%, -14px); max-width: 86%; padding: 10px 24px; border: 3px solid #4a2a10; border-radius: 12px; background: repeating-linear-gradient(90deg, rgba(0,0,0,0.07) 0 2px, transparent 2px 11px), linear-gradient(#b27a40, #7b4a1f); box-shadow: 0 8px 18px rgba(0,0,0,0.5); color: #fff4d8; text-align: center; opacity: 0; transition: opacity 0.3s, transform 0.3s; z-index: 25; pointer-events: none; }
         #cartel-caida.visible { opacity: 1; transform: translate(-50%, 0); }
-        #cartel-caida .cartel-titulo { font-size: 26px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; text-shadow: 0 2px 0 #4a2a10; }
+        #cartel-caida .cartel-titulo { font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 2px 0 #4a2a10; }
         #cartel-caida .cartel-sub { font-size: 16px; margin-top: 4px; opacity: 0.95; }
         #ui-gemas { color: #66ddff; font-size: 20px; margin-top: 4px; }
         @keyframes shakeCam { 0%,100%{ transform: translate(0,0); } 25%{ transform: translate(-4px,3px); } 50%{ transform: translate(4px,-3px); } 75%{ transform: translate(-3px,-4px); } }
@@ -185,6 +185,9 @@
 
         // ⚡ Cada fase tiene un grupo de montañas compatibles con su bioma
         // 1=Clásica, 2=Volcán, 3=Nevada, 4=Tropical, 5=Desierto, 6=Mágica, 7=Bosque Oscuro, 8=Helada, 9=Rocosa, 10=Dorada
+        // Cada personaje mira a la cámara (+z). Los modelos hechos de perfil se giran una sola vez al crearlos
+        const FRENTE_PERSONAJES = { lobo_feroz: Math.PI / 2, cobra_venenosa: -Math.PI / 2, aguila_gigante: -Math.PI / 2, mamut_ancestral: -Math.PI / 2, escorpion_abisal: -Math.PI / 2, dragon_rojo_2: -Math.PI / 2 };
+        function girarAFrente(modelo, tipo) { modelo.rotation.y = FRENTE_PERSONAJES[tipo] || 0; }
         const configFases = [
             { nombre: "FASE 1", boss: 'basilisco_rey', skyC: ['#2a1b4e', '#f27832', '#ffda44'], fog: 0xf27832, aguaColor: 0x00ffff, aguaGlow: 0x0088ff, gapExtra: 0, cesped: 0x3a8b3a, montanas: [1, 7, 9] },
             { nombre: "FASE 2", boss: 'manticora', skyC: ['#4a0e0e', '#c24141', '#ff9900'], fog: 0xc24141, aguaColor: 0xffcc88, aguaGlow: 0xff9900, gapExtra: 1, cesped: 0xa8925a, montanas: [5, 2, 9] },
@@ -223,7 +226,6 @@
         const geoTallo = new THREE.CylinderGeometry(0.02, 0.02, 0.4, 5);
         const matTallo = new THREE.MeshStandardMaterial({ color: 0x228b22 });
         const geoPetalo = new THREE.SphereGeometry(0.1, 6, 6);
-        const matBordeCespedBase = {};
 
         function createTextTexture(text) { const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#FFF'; ctx.font = '80px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 64, 70); return new THREE.CanvasTexture(canvas); }
         function crearTexturaAgua() { const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 512; const ctx = canvas.getContext('2d'); const grad = ctx.createLinearGradient(0,0,0,512); grad.addColorStop(0, '#FFFFFF'); grad.addColorStop(0.5, '#AAAAAA'); grad.addColorStop(1, '#FFFFFF'); ctx.fillStyle = grad; ctx.fillRect(0, 0, 128, 512); ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; for (let i = 0; i < 80; i++) ctx.fillRect(Math.random()*128, Math.random()*512, 2, 10 + Math.random()*50); const texture = new THREE.CanvasTexture(canvas); texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(2, 3); return texture; }
@@ -846,13 +848,39 @@
             tierra.receiveShadow = true;
             registrarEntorno(tierra, suelo, (xL + xR) / 2);
         }
-        // Foso entre dos pasarelas: su fondo queda 5 unidades bajo la más baja y tiene suelo físico, así la caída se para ahí
+        // Foso entre dos pasarelas: su fondo queda 5 unidades bajo la más baja, con pinchos; la punta de los pinchos es el suelo
+        const matPinchos = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.5 });
         function crearFoso(xL, xR, bordeY, fIndex, fData) {
-            const topeY = bordeY - 5;
+            const topeY = bordeY - 5, alturaPinchos = 1.3;
             const suelo = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3((xR - xL) / 2 + 0.5, 2, 3.25)), material: matFisicas });
-            suelo.position.set((xL + xR) / 2, topeY - 2, 0);
+            suelo.position.set((xL + xR) / 2, topeY + alturaPinchos - 2, 0);
             rellenarHueco(xL, xR, topeY, fIndex, fData, suelo);
+            const pinchos = crearPinchos(xL + 0.6, xR - 0.6, topeY, alturaPinchos);
+            if (pinchos) registrarEntorno(pinchos, null, (xL + xR) / 2);
             fosos.push({ xL, xR, bordeY });
+        }
+        // Pinchos de metal con la punta roja: una sola malla por foso, en varias filas
+        function crearPinchos(x0, x1, y0, alto) {
+            if (x1 <= x0) return null;
+            const pos = [], col = [], gris = new THREE.Color(0xa6aab3), rojo = new THREE.Color(0xd8323a), r = 0.24;
+            for (const z of [-2.2, -0.7, 0.8, 2.3]) {
+                for (let x = x0; x <= x1; x += 0.9) {
+                    const cx = x + (Math.random() - 0.5) * 0.2, cz = z + (Math.random() - 0.5) * 0.3;
+                    const esquinas = [[cx - r, cz - r], [cx + r, cz - r], [cx + r, cz + r], [cx - r, cz + r]];
+                    for (let k = 0; k < 4; k++) {
+                        const a = esquinas[k], b = esquinas[(k + 1) % 4];
+                        pos.push(a[0], y0, a[1], cx, y0 + alto, cz, b[0], y0, b[1]); // contorno exterior hacia fuera
+                        col.push(gris.r, gris.g, gris.b, rojo.r, rojo.g, rojo.b, gris.r, gris.g, gris.b);
+                    }
+                }
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+            geo.computeVertexNormals();
+            const malla = new THREE.Mesh(geo, matPinchos);
+            malla.receiveShadow = true;
+            return malla;
         }
         // Tipos de agua: cada lago o charca elige uno. Cambian el color, la transparencia, lo hondo que es y el fondo que se ve
         const TIPOS_AGUA = {
@@ -1034,51 +1062,80 @@
             if(isPlatform) plataformas.push({ x: x - w/2, y: y, w: w, h: h });
         }
 
-        function crearTerrenoOndulado(startX, w, cy, fIndex, fData = null, decorado = false) {
-            const numSegmentos = Math.max(3, Math.floor(w / 2)); 
-            const segW = w / numSegmentos;
-            const colorCesped = fData ? fData.cesped : 0x3a8b3a;
-            
-            if (!matBordeCespedBase[fIndex]) {
-                matBordeCespedBase[fIndex] = new THREE.MeshStandardMaterial({ color: colorCesped, roughness: 1.0, flatShading: true });
+        // Suelo de la pasarela: la física sigue siendo una losa por segmento, para que pise igual que antes.
+        // Lo que se ve es una sola pieza continua de hierba y tierra por cada cuatro segmentos, sin juntas entre ellos.
+        const ESCALA_TEXTURA_SUELO = 8;
+        const matSueloVariado = {};
+        // Malla de una pieza: hierba en la superficie, borde de hierba y tierra debajo, con tonos variados
+        function crearMallaTramo(xs, ys, fIndex) {
+            if (!matSueloVariado[fIndex]) {
+                const arriba = matFases[fIndex].top.clone(), abajo = matFases[fIndex].bot.clone();
+                arriba.vertexColors = true; abajo.vertexColors = true;
+                matSueloVariado[fIndex] = [arriba, abajo];
             }
-            const matCesped = matBordeCespedBase[fIndex];
-            
-            for(let i = 0; i < numSegmentos; i++) {
-                let wave1 = calcularOnda(startX + i*segW); 
+            const E = ESCALA_TEXTURA_SUELO, pos = [], uv = [], col = [];
+            const tono = (x) => 0.84 + 0.16 * (0.5 + 0.3 * Math.sin(x * 0.9 + 1.1) + 0.2 * Math.sin(x * 2.7 + 0.4));
+            const v = (x, y, z, t) => { // t: coordenada vertical de la textura (profundidad en la hierba, altura en las caras)
+                pos.push(x, y, z); uv.push(x / E, t);
+                const b = tono(x) + (Math.random() - 0.5) * 0.08;
+                col.push(b, b, b);
+                return pos.length / 3 - 1;
+            };
+            const sup0 = [], sup1 = [], borde0 = [], borde1 = [], tie0 = [], tie1 = [];
+            for (let k = 0; k < xs.length; k++) {
+                const x = xs[k], y = ys[k];
+                sup0.push(v(x, y, -3.75, -3.75 / E)); sup1.push(v(x, y, 3.75, 3.75 / E));
+                borde0.push(v(x, y, 3.75, y / E)); borde1.push(v(x, y - 1.5, 3.75, (y - 1.5) / E));
+                tie0.push(v(x, y - 1.5, 3.25, (y - 1.5) / E)); tie1.push(v(x, y - 41.5, 3.25, (y - 41.5) / E));
+            }
+            const arribaInd = [], tierraInd = [];
+            for (let k = 0; k < xs.length - 1; k++) {
+                arribaInd.push(sup0[k], sup1[k], sup0[k + 1], sup1[k], sup1[k + 1], sup0[k + 1]); // hierba (mira arriba)
+                arribaInd.push(borde0[k], borde1[k], borde0[k + 1], borde1[k], borde1[k + 1], borde0[k + 1]); // borde (mira a la cámara)
+                tierraInd.push(tie0[k], tie1[k], tie0[k + 1], tie1[k], tie1[k + 1], tie0[k + 1]); // tierra (mira a la cámara)
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+            geo.setIndex(arribaInd.concat(tierraInd));
+            geo.addGroup(0, arribaInd.length, 0);
+            geo.addGroup(arribaInd.length, tierraInd.length, 1);
+            geo.computeVertexNormals();
+            const malla = new THREE.Mesh(geo, matSueloVariado[fIndex]);
+            malla.castShadow = true;
+            malla.receiveShadow = true;
+            return malla;
+        }
+
+        function crearTerrenoOndulado(startX, w, cy, fIndex, fData = null, decorado = false) {
+            const numSegmentos = Math.max(3, Math.floor(w / 2));
+            const segW = w / numSegmentos;
+            const PIEZA = 4; // segmentos por pieza visual
+            let pieza = null;
+            for (let i = 0; i < numSegmentos; i++) {
+                let wave1 = calcularOnda(startX + i*segW);
                 let wave2 = calcularOnda(startX + (i+1)*segW);
-                let hMedio = (wave1 + wave2) / 2; 
-                let anguloInclinacion = Math.atan2(wave2 - wave1, segW); 
+                let hMedio = (wave1 + wave2) / 2;
+                let anguloInclinacion = Math.atan2(wave2 - wave1, segW);
                 let posX = startX + (i * segW) + (segW/2);
-                
-                const meshTop = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.05, 1.5, 7.5), matFases[fIndex].top); 
-                meshTop.position.set(posX, cy + hMedio - 0.75, 0); 
-                meshTop.rotation.z = anguloInclinacion; 
-                meshTop.castShadow = true; 
-                meshTop.receiveShadow = true;
-                
-                const bordeFront = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.1, 0.25, 0.6), matCesped);
-                bordeFront.position.set(0, 0.85, 3.5);
-                bordeFront.castShadow = true;
-                meshTop.add(bordeFront);
-                
-                const bordeBack = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.1, 0.25, 0.6), matCesped);
-                bordeBack.position.set(0, 0.85, -3.5);
-                bordeBack.castShadow = true;
-                meshTop.add(bordeBack);
-                
-                const meshBot = new THREE.Mesh(new THREE.BoxGeometry(segW * 1.05, 40, 6.5), matFases[fIndex].bot); 
-                meshBot.position.set(posX, cy + hMedio - 1.5 - 19, 0); 
-                meshBot.receiveShadow = true;
-                
-                const body = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3((segW*1.05)/2, 1.5/2, 3.75)), material: matFisicas }); 
-                body.position.set(posX, cy + hMedio - 0.75, 0); 
+
+                // Física: la losa inclinada y la cara de tierra del segmento
+                const body = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3((segW*1.05)/2, 1.5/2, 3.75)), material: matFisicas });
+                body.position.set(posX, cy + hMedio - 0.75, 0);
                 body.quaternion.setFromAxisAngle(new CANNON.Vec3(0,0,1), anguloInclinacion);
-                registrarEntorno(meshTop, body, posX, true, segW*1.05, 1.5, cy + hMedio - 1.5); 
+                registrarEntorno(new THREE.Group(), body, posX, true, segW*1.05, 1.5, cy + hMedio - 1.5);
                 const bodyBot = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3((segW*1.05)/2, 20, 3.25)), material: matFisicas });
                 bodyBot.position.set(posX, cy + hMedio - 1.5 - 20.1, 0); // su cima queda bajo la losa: no asoma por encima en pendientes
-                registrarEntorno(meshBot, bodyBot, posX);
-                
+                registrarEntorno(new THREE.Group(), bodyBot, posX);
+
+                // Visual: anclaje con la misma postura que tenía la losa; de él cuelgan la decoración y las plantas
+                const marco = new THREE.Group();
+                marco.position.set(posX, cy + hMedio - 0.75, 0);
+                marco.rotation.z = anguloInclinacion;
+                if (i % PIEZA === 0) pieza = new THREE.Group();
+                pieza.add(marco);
+
                 if (decorado && fData) {
                     const numMatojos = 2 + Math.floor(Math.random() * 3);
                     for (let g = 0; g < numMatojos; g++) {
@@ -1093,7 +1150,7 @@
                         matojo.rotation.z = (Math.random() - 0.5) * 0.4;
                         matojo.rotation.y = Math.random() * Math.PI;
                         matojo.castShadow = true;
-                        meshTop.add(matojo);
+                        marco.add(matojo);
                     }
                     
                     if (Math.random() < 0.25) {
@@ -1101,11 +1158,11 @@
                         const fz = (Math.random() - 0.5) * 5.5;
                         const tallo = new THREE.Mesh(geoTallo, matTallo);
                         tallo.position.set(fx, 0.95, fz);
-                        meshTop.add(tallo);
+                        marco.add(tallo);
                         const petalo = new THREE.Mesh(geoPetalo, matFlor[Math.floor(Math.random() * matFlor.length)]);
                         petalo.position.set(fx, 1.2, fz);
                         petalo.castShadow = true;
-                        meshTop.add(petalo);
+                        marco.add(petalo);
                     }
                     
                     if(Math.random() < 0.18) { 
@@ -1114,7 +1171,7 @@
                             pino.position.set((Math.random() - 0.5) * segW, 0.75, -2 - Math.random() * 2.5); 
                             pino.rotation.y = Math.random() * Math.PI * 2; 
                             pino.scale.setScalar(0.7 + Math.random() * 0.6); 
-                            meshTop.add(pino); 
+                            marco.add(pino); 
                         } 
                     }
                     
@@ -1140,10 +1197,18 @@
                                 if(decoName === 'huesos.glb') s = 0.7 + Math.random()*0.4;
                                 if(decoName === 'arbusto.glb') s = 1.3 + Math.random()*0.6;
                                 deco.scale.setScalar(s);
-                                meshTop.add(deco);
+                                marco.add(deco);
                             }
                         }
                     }
+                }
+
+                if (i % PIEZA === PIEZA - 1 || i === numSegmentos - 1) {
+                    const i0 = i - (i % PIEZA);
+                    const xs = [], ys = [];
+                    for (let k = i0; k <= i + 1; k++) { const x = startX + k * segW; xs.push(x); ys.push(cy + calcularOnda(x)); }
+                    pieza.add(crearMallaTramo(xs, ys, fIndex));
+                    registrarEntorno(pieza, null, (xs[0] + xs[xs.length - 1]) / 2);
                 }
             }
         }
@@ -1344,6 +1409,7 @@
                                 let eY = isFlying ? (cy + calcularOnda(eX) + 9 + (k%2)) : (cy + calcularOnda(eX));
                                 enWrapper.position.set(eX, eY, 0);
                                 let eNodes = cacheAnimNodes(en);
+                                girarAFrente(en, tipo);
 
                                 let vxDir = (k%2 === 0) ? 1 : -1;
                                 enemigos.push({ mesh: enWrapper, hpBarGrp: hpBar, nodes: eNodes, mixer: enMixer, x: eX, y: eY, w: 2.37, h: 2.37, tipo: tipo, vx: 0.08 * vxDir, minX: eX - 4, maxX: eX + 4, hp: 3, maxHp: 3, flying: isFlying, baseY: cy, activo: false });
@@ -1394,6 +1460,7 @@
                 if(mCargados[fData.boss]) {
                     let bWrapper = new THREE.Group();
                     let bModel = mCargados[fData.boss].clone();
+                    girarAFrente(bModel, fData.boss);
                     let bossScaleFactor = (1.5 + (f * 0.2)) * 1.4;
                     bModel.scale.setScalar(bossScaleFactor);
                     bWrapper.add(bModel);
@@ -1412,7 +1479,7 @@
                     bWrapper.position.set(bossX, bY, 0);
                     let bNodes = cacheAnimNodes(bModel);
 
-                    enemigos.push({ mesh: bWrapper, hpBarGrp: hpBar, nodes: bNodes, mixer: bMixer, x: bossX, y: bY, w: 4.9, h: 6.3, tipo: fData.boss, esBoss: true, vx: 0, minX: cx+5, maxX: cx+35, hp: bMaxHp, maxHp: bMaxHp, flying: fData.flyingBoss, isBossFase: f, baseY: cy, activo: false, jumpOffset: 0, jumpVy: 0 });
+                    enemigos.push({ mesh: bWrapper, hpBarGrp: hpBar, nodes: bNodes, mixer: bMixer, x: bossX, y: bY, w: 4.9, h: 6.3, tipo: fData.boss, esBoss: true, vx: 0, minX: cx + 0.5, maxX: cx + 34.6, arenaX0: cx, arenaX1: cx + 40, hp: bMaxHp, maxHp: bMaxHp, flying: fData.flyingBoss, isBossFase: f, baseY: cy, activo: false, jumpOffset: 0, jumpVy: 0 });
                 }
                 cx += 40; 
                 if (f < configFases.length - 1) { crearTerrenoOndulado(cx, 20, cy, f, fData, true); cx += 20; }
@@ -1449,7 +1516,7 @@
             let rawModel = mCargados[id].clone(); playerWrapper = new THREE.Group(); playerWrapper.add(rawModel); scene.add(playerWrapper);
             playerWrapper.traverse(c => { if(c.name === 'armL') animNodes.armL = c; if(c.name === 'armR') animNodes.armR = c; if(c.name === 'legL') animNodes.legL = c; if(c.name === 'legR') animNodes.legR = c; if(c.name === 'canaPescar') animNodes.cana = c; });
 
-            playerWrapper.rotation.y = Math.PI / 2;
+            playerWrapper.rotation.y = 0; // el héroe siempre mira a la cámara
 
             playerBody = new CANNON.Body({ mass: 5, shape: new CANNON.Sphere(0.6), material: matFisicas, fixedRotation: true, linearDamping: 0.1 }); scene.add(playerWrapper); world.addBody(playerBody);
             generarTodaLaCampana(); prepararFase(0, true);
@@ -1631,7 +1698,6 @@
             playerBody.collisionResponse = false; // durante el vuelo no choca: pasa por encima de lo que haya
             playerBody.velocity.set(0, 0, 0);
             phys.dir = m.T.x >= m.P0.x ? 1 : -1;
-            playerWrapper.rotation.y = phys.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
         }
         function recorrerViaje() {
             const m = phys.muerte;
@@ -1670,7 +1736,7 @@
 
         // Caída: aparece el cartel y empieza la animación (agua: se hunde; foso: aterriza con polvo; vacío: cae)
         function iniciarMuerte(caida) {
-            const titulos = { agua: '¡Te has caído al agua!', foso: '¡Te has caído al foso!', vacio: '¡Te has caído!' };
+            const titulos = { agua: '¡Te has caído al agua!', foso: '¡Te has caído en los pinchos!', vacio: '¡Te has caído!' };
             phys.muerte = { tipo: caida.tipo, fase: 'caida', t: 0, esperaViaje: caida.tipo === 'agua' ? 110 : (caida.tipo === 'foso' ? 80 : 45), nivel: caida.nivel, vyAnterior: 0, impacto: false, tImpacto: 0, anillo: null };
             mostrarCartel(titulos[caida.tipo]);
             if (caida.tipo === 'agua') {
@@ -1719,6 +1785,7 @@
                 m.impacto = true;
                 playSound('hit');
                 spawnParticulas(phys.x + 0.6, phys.y + 0.1, 0xB58B5A, 12, 0.5);
+                spawnParticulas(phys.x + 0.6, phys.y + 0.6, 0xd8323a, 8, 0.45); // los pinchos
                 sacudidaCamara = 0.5;
             }
             if (m.impacto) {
@@ -1763,6 +1830,113 @@
             }
             camera.lookAt(camTargetX, camTargetY, -2);
             cieloDomo.position.copy(camera.position);
+        }
+
+        // Jefes: recorren toda su pasarela, a veces saltan y, cada cierto tiempo, cargan una onda de energía y la lanzan en línea recta
+        function actualizarJefe(e) {
+            if (e.estado === undefined) {
+                e.estado = 'paseo'; e.tEstado = 0; e.objetivoX = e.x; e.pausa = 0; e.jumpOffset = 0; e.jumpVy = 0;
+                e.enfriamiento = 150 + Math.random() * 120;
+            }
+            const fase = e.isBossFase || 0;
+            e.tEstado += GAME_SPEED;
+            let velocidadObjetivo = 0;
+            if (e.estado === 'paseo') {
+                const velocidad = e.flying ? 0.13 : 0.09;
+                if (Math.abs(e.objetivoX - e.x) < 0.8) {
+                    if (e.pausa <= 0) e.pausa = 40 + Math.random() * 70; // se para un momento antes de cambiar de sitio
+                    e.pausa -= GAME_SPEED;
+                    if (e.pausa <= 0) {
+                        // nuevo destino por toda la pasarela; a veces, cerca del héroe
+                        e.objetivoX = Math.random() < 0.35 ? Math.min(e.maxX, Math.max(e.minX, phys.x + (Math.random() - 0.5) * 12)) : e.minX + Math.random() * (e.maxX - e.minX);
+                    }
+                } else {
+                    velocidadObjetivo = Math.sign(e.objetivoX - e.x) * velocidad;
+                }
+                e.enfriamiento -= GAME_SPEED;
+                if (e.enfriamiento <= 0) iniciarCarga(e);
+            } else if (e.estado === 'carga') {
+                const duracion = Math.max(55, 85 - 5 * fase);
+                if (e.orbe) {
+                    const o = origenAtaque(e);
+                    e.orbe.position.set(o.x - e.mesh.position.x, o.y - e.mesh.position.y, 0.4);
+                    e.orbe.scale.setScalar(0.2 + 1.3 * Math.min(1, e.tEstado / duracion));
+                    if (Math.floor(e.tEstado) % 3 === 0) spawnParticulas(o.x + (Math.random() - 0.5) * 3, o.y + (Math.random() - 0.5) * 2, 0x99eeff, 1, 0.2);
+                }
+                if (e.tEstado >= duracion) lanzarHaz(e);
+            } else if (e.estado === 'disparo') {
+                actualizarHaz(e);
+                if (e.tEstado >= 50) { quitarHaz(e); e.estado = 'descanso'; e.tEstado = 0; }
+            } else if (e.estado === 'descanso') {
+                if (e.tEstado >= 40) { e.estado = 'paseo'; e.tEstado = 0; e.enfriamiento = Math.max(170, 320 - 15 * fase) + Math.random() * 90; }
+            }
+            e.vx += (velocidadObjetivo - e.vx) * 0.1 * GAME_SPEED;
+            if (!e.flying) {
+                if (e.jumpOffset <= 0 && e.estado === 'paseo' && Math.random() < 0.012) e.jumpVy = 0.45 + Math.random() * 0.3;
+                if (e.jumpOffset > 0 || e.jumpVy > 0) {
+                    e.jumpVy -= 0.035 * GAME_SPEED;
+                    e.jumpOffset += e.jumpVy * GAME_SPEED;
+                    if (e.jumpOffset < 0) { e.jumpOffset = 0; e.jumpVy = 0; }
+                }
+            }
+        }
+        // Carga: el jefe se para, se gira hacia el héroe y la energía crece delante de él
+        function iniciarCarga(e) {
+            e.estado = 'carga'; e.tEstado = 0;
+            e.dirAtaque = phys.x + 0.6 >= e.x + e.w / 2 ? 1 : -1;
+            e.orbe = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: 0xbff6ff, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
+            e.orbe.scale.setScalar(0.2);
+            e.mesh.add(e.orbe);
+            playSound('dash');
+        }
+        function origenAtaque(e) {
+            return { x: e.x + e.w / 2 + e.dirAtaque * e.w * 0.45, y: e.y + (e.flying ? 2.6 : 1.2) };
+        }
+        // Haz: en línea recta hasta el borde de la pasarela; los voladores apuntan a donde está el héroe al lanzarlo
+        function lanzarHaz(e) {
+            const o = origenAtaque(e);
+            let d;
+            if (e.flying) {
+                const dx = phys.x + 0.6 - o.x, dy = phys.y + 1.1 - o.y, n = Math.hypot(dx, dy) || 1;
+                d = { x: o.x + dx / n * 50, y: o.y + dy / n * 50 };
+            } else {
+                d = { x: e.dirAtaque > 0 ? e.arenaX1 : e.arenaX0, y: o.y };
+            }
+            if (e.orbe) { e.mesh.remove(e.orbe); e.orbe.geometry.dispose(); e.orbe.material.dispose(); e.orbe = null; }
+            const largo = Math.hypot(d.x - o.x, d.y - o.y), grosor = e.flying ? 1.3 : 1.1;
+            const grupo = new THREE.Group();
+            const nucleo = new THREE.Mesh(new THREE.BoxGeometry(largo, grosor, grosor), new THREE.MeshBasicMaterial({ color: 0xf2ffff }));
+            const halo = new THREE.Mesh(new THREE.BoxGeometry(largo, grosor * 2.4, grosor * 2.4), new THREE.MeshBasicMaterial({ color: 0x4fd8ff, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
+            grupo.add(nucleo, halo);
+            grupo.position.set((o.x + d.x) / 2 - e.mesh.position.x, (o.y + d.y) / 2 - e.mesh.position.y, 0);
+            grupo.rotation.z = Math.atan2(d.y - o.y, d.x - o.x);
+            e.mesh.add(grupo);
+            e.haz = { grupo, o, d, grosor, nucleo, halo, golpeado: false };
+            e.estado = 'disparo'; e.tEstado = 0;
+            playSound('shoot');
+        }
+        // El haz hiere al héroe una sola vez si lo toca (saltar sobre él es la forma de esquivarlo)
+        function actualizarHaz(e) {
+            const h = e.haz, largo = Math.hypot(h.d.x - h.o.x, h.d.y - h.o.y);
+            h.halo.material.opacity = 0.3 + 0.2 * Math.sin(e.tEstado * 0.9);
+            if (h.golpeado || largo < 0.5) return;
+            const hx = phys.x + 0.6, hy = phys.y + 1.1;
+            for (let s = 0; s <= largo; s += 0.4) {
+                const t = s / largo, px = h.o.x + (h.d.x - h.o.x) * t, py = h.o.y + (h.d.y - h.o.y) * t;
+                if (Math.abs(px - hx) < 0.6 + h.grosor / 2 && Math.abs(py - hy) < 1.1 + h.grosor / 2) {
+                    h.golpeado = true;
+                    spawnParticulas(hx, hy, 0x99eeff, 10, 0.5);
+                    takeDamage(e.dirAtaque * 0.5);
+                    break;
+                }
+            }
+        }
+        function quitarHaz(e) {
+            if (!e.haz) return;
+            e.mesh.remove(e.haz.grupo);
+            e.haz.nucleo.geometry.dispose(); e.haz.nucleo.material.dispose();
+            e.haz.halo.geometry.dispose(); e.haz.halo.material.dispose();
+            e.haz = null;
         }
 
         function actualizarJuego() {
@@ -1822,7 +1996,6 @@
                 const sentido = Math.sign(entradaX);
                 targetVx = sentido * pStats.speed * 40 * Math.min(1, Math.abs(entradaX));
                 phys.dir = sentido;
-                playerWrapper.rotation.y = sentido > 0 ? Math.PI / 2 : -Math.PI / 2;
             }
 
             if (phys.invuln < 70 && phys.rebote <= 0) { playerBody.velocity.x += (targetVx - playerBody.velocity.x) * 0.2; }
@@ -2066,20 +2239,7 @@
 
                 if (e.mixer) e.mixer.update((1 / 60) * GAME_SPEED);
 
-                if (e.esBoss) {
-                    let speed = e.flying ? 0.15 : 0.08;
-                    let dir = (phys.x > e.x) ? 1 : -1;
-                    e.vx += (dir * speed - e.vx) * 0.05 * GAME_SPEED;
-                    if (!e.flying) {
-                        if (e.jumpOffset === undefined) { e.jumpOffset = 0; e.jumpVy = 0; }
-                        if (e.jumpOffset <= 0 && Math.random() < 0.015) { e.jumpVy = 0.45 + Math.random() * 0.3; }
-                        if (e.jumpOffset > 0 || e.jumpVy > 0) {
-                            e.jumpVy -= 0.035 * GAME_SPEED;
-                            e.jumpOffset += e.jumpVy * GAME_SPEED;
-                            if (e.jumpOffset < 0) { e.jumpOffset = 0; e.jumpVy = 0; }
-                        }
-                    }
-                }
+                if (e.esBoss) actualizarJefe(e);
 
                 e.x += e.vx * GAME_SPEED;
                 if(e.x < e.minX) { e.x = e.minX; e.vx = Math.abs(e.vx); }
@@ -2103,7 +2263,6 @@
 
                 let modelMesh = e.mesh.children[0];
                 if(modelMesh) {
-                    modelMesh.rotation.y = (e.vx > 0) ? Math.PI / 2 : -Math.PI / 2;
                     if (e.jumpVy && e.jumpVy > 0) modelMesh.rotation.z = (e.vx > 0) ? -0.2 : 0.2;
                     else if (e.jumpVy && e.jumpVy < 0) modelMesh.rotation.z = (e.vx > 0) ? 0.2 : -0.2;
                     else modelMesh.rotation.z = 0;
