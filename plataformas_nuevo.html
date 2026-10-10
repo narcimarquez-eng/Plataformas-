@@ -694,33 +694,19 @@
 
         // Montañas apoyadas en el valle (bajo el nivel del lago) en vez de flotar
         const bboxMontanas = {};
+        // Cara delantera de las montañas, siempre detrás de lo que se pisa: así no tapan las pasarelas ni al héroe.
+        // Las de los lagos quedan justo tras el muro del lago; las de la cadena, tras la cara de las colinas (z = -8).
+        // Su base queda tapada por la tierra de delante, sin necesidad de cortarlas.
+        const CARA_MONTANAS_LAGO = -6, CARA_MONTANAS_CADENA = -9, ESCALA_MONTANA_LAGO = 1.4;
+        function zMontana(clave, escala, cara, separacion = 0) {
+            if (!bboxMontanas[clave]) bboxMontanas[clave] = new THREE.Box3().setFromObject(mCargados[clave]);
+            return bboxMontanas[clave].isEmpty() ? cara - 20 : cara - separacion - bboxMontanas[clave].max.z * escala;
+        }
         function colocarMontana(mont, clave, x, cyBase, z, escala = 1.5) {
             if (!bboxMontanas[clave]) bboxMontanas[clave] = new THREE.Box3().setFromObject(mCargados[clave]);
             mont.scale.setScalar(escala);
             const baseY = bboxMontanas[clave].isEmpty() ? 0 : bboxMontanas[clave].min.y;
             mont.position.set(x, cyBase - 3 - baseY * escala, z);
-        }
-
-        // Cascada del lago: la pieza de agua del modelo, girada para caer en vertical delante del muro del fondo, hasta el estanque
-        function crearCascadaEnLago(xc, rio, yAgua, altoCaida, zCascada) {
-            const p = rio.geometry.attributes.position;
-            let minY = Infinity, maxY = -Infinity;
-            for (let i = 0; i < p.count; i++) { minY = Math.min(minY, p.getY(i)); maxY = Math.max(maxY, p.getY(i)); }
-            const media = (cond) => { let y = 0, z = 0, n = 0; for (let i = 0; i < p.count; i++) if (cond(p.getY(i))) { y += p.getY(i); z += p.getZ(i); n++; } return { y: y / n, z: z / n }; };
-            const arriba = media(y => y > maxY - 0.6), abajo = media(y => y < minY + 0.6);
-            const dy = arriba.y - abajo.y, dz = arriba.z - abajo.z;
-            const alfa = Math.atan2(-dz, dy); // gira la rampa hasta que quede vertical
-            const c = Math.cos(alfa), s = Math.sin(alfa);
-            const by = abajo.y * c - abajo.z * s, bz = abajo.y * s + abajo.z * c; // punto más bajo tras el giro
-            const grupo = new THREE.Group();
-            const copia = rio.clone();
-            copia.rotation.set(alfa, 0, 0);
-            copia.position.set(0, -by, -bz);
-            grupo.add(copia);
-            grupo.scale.setScalar(altoCaida / Math.hypot(dy, dz));
-            grupo.position.set(xc, yAgua + 0.05, zCascada);
-            registrarEntorno(grupo, null, xc);
-            return grupo;
         }
 
         function crearMontanaLejana(clave, fData) {
@@ -741,8 +727,9 @@
                 const clave = 'montana_' + fData.montanas[Math.floor(Math.random() * fData.montanas.length)];
                 const mont = crearMontanaLejana(clave, fData);
                 if (!mont) continue;
-                const xm = x + (Math.random() - 0.5) * 6, z = -45 + (Math.random() - 0.5) * 16;
-                colocarMontana(mont, clave, xm, alturaColinaFondo(xm, z), z, 0.85 + Math.random() * 0.25);
+                const escala = 1.0 + Math.random() * 0.3;
+                const xm = x + (Math.random() - 0.5) * 6, z = zMontana(clave, escala, CARA_MONTANAS_CADENA, Math.random() * 4);
+                colocarMontana(mont, clave, xm, alturaColinaFondo(xm, z), z, escala);
                 registrarEntorno(mont, null, xm);
             }
         }
@@ -773,7 +760,7 @@
         }
         let colinasFondo = null, frentesFondo = [];
         function crearColinasFondo(xIni, xFin) {
-            const pasoX = 6, zFrente = -8, zFondo = -240, pasosZ = 18, franja = 8;
+            const pasoX = 6, zFrente = -8, zFondo = -240, pasosZ = 18, franja = 60; // la cara de tierra baja mucho: sin ella se vería el cielo por debajo
             const nX = Math.ceil((xFin - xIni) / pasoX);
             sueloX0 = xIni; sueloPaso = pasoX; sueloAlturas = [];
             for (let i = 0; i <= nX; i++) sueloAlturas.push(alturaTerrenoPlataformas(xIni + i * pasoX));
@@ -862,18 +849,30 @@
             rellenarHueco(xL, xR, topeY, fIndex, fData, suelo);
             fosos.push({ xL, xR, bordeY });
         }
-        function crearLagoTresD(xL, xR, cyIzq, cyDer, fIndex, fData) {
+        // Tipos de agua: cada lago o charca elige uno. Cambian el color, la transparencia, lo hondo que es y el fondo que se ve
+        const TIPOS_AGUA = {
+            profundo: { nombre: 'profundo', altura: 2.2, hondura: 2.5, opacidad: 0.8, emisivo: 0.35, color: c => new THREE.Color(c), fondo: c => new THREE.Color(c).multiplyScalar(0.4) },
+            somero: { nombre: 'somero', altura: 1.2, hondura: 1.2, opacidad: 0.6, emisivo: 0.2, color: c => new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.45), fondo: () => new THREE.Color(0xd8c38a) },
+            pantano: { nombre: 'pantano', altura: 1.6, hondura: 2.0, opacidad: 0.92, emisivo: 0.15, color: c => new THREE.Color(c).lerp(new THREE.Color(0x3d5a1e), 0.6), fondo: () => new THREE.Color(0x2a2412) }
+        };
+        // Los lagos grandes son sobre todo profundos; las charcas, someras o de pantano
+        function elegirTipoAgua(donde) {
+            const r = Math.random();
+            if (donde === 'lago') return r < 0.5 ? TIPOS_AGUA.profundo : (r < 0.75 ? TIPOS_AGUA.somero : TIPOS_AGUA.pantano);
+            return r < 0.5 ? TIPOS_AGUA.somero : TIPOS_AGUA.pantano;
+        }
+        function crearLagoTresD(xL, xR, cyIzq, cyDer, fIndex, fData, tipo = TIPOS_AGUA.profundo) {
             const hz = 3.75, gap = xR - xL, xc = (xL + xR) / 2;
             // Altura de la orilla en cada x: la pasarela izquierda sigue su nivel y la derecha el suyo
             const alturaBorde = (x) => cyIzq + (cyDer - cyIzq) * (x - xL) / gap + calcularOnda(x);
             let ondaMinima = Infinity; // el agua queda por debajo del punto más bajo de la orilla
             for (let i = 0; i <= 8; i++) ondaMinima = Math.min(ondaMinima, alturaBorde(xL + gap * i / 8));
-            const nivel = ondaMinima - 2.2; // superficie del agua
-            const fondo = nivel - 2.5;
+            const nivel = ondaMinima - tipo.altura; // superficie del agua
+            const fondo = nivel - tipo.hondura;
             const grupo = new THREE.Group();
             grupo.position.set(xc, 0, 0);
             // fondo de la cuenca, oscuro bajo el agua
-            const cuenca = new THREE.Mesh(new THREE.PlaneGeometry(gap, hz * 2), new THREE.MeshStandardMaterial({ color: new THREE.Color(fData.aguaColor).multiplyScalar(0.4), roughness: 0.9 }));
+            const cuenca = new THREE.Mesh(new THREE.PlaneGeometry(gap, hz * 2), new THREE.MeshStandardMaterial({ color: tipo.fondo(fData.aguaColor), roughness: 0.9 }));
             cuenca.rotation.x = -Math.PI / 2; cuenca.position.y = fondo; grupo.add(cuenca);
             // muro del fondo: segmentos inclinados como las pasarelas, con hierba arriba y tierra abajo
             const numSeg = Math.max(3, Math.floor(gap / 2)), segW = gap / numSeg;
@@ -895,7 +894,7 @@
             // superficie: ondula y deja ver el fondo
             const geoAgua = new THREE.PlaneGeometry(gap, hz * 2, 24, 8);
             const baseAgua = geoAgua.attributes.position.array.slice();
-            const superficie = new THREE.Mesh(geoAgua, new THREE.MeshStandardMaterial({ color: fData.aguaColor, emissive: fData.aguaGlow, emissiveIntensity: 0.35, map: texAgua, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.8, depthWrite: false }));
+            const superficie = new THREE.Mesh(geoAgua, new THREE.MeshStandardMaterial({ color: tipo.color(fData.aguaColor), emissive: fData.aguaGlow, emissiveIntensity: tipo.emisivo, map: texAgua, roughness: 0.15, metalness: 0.1, transparent: true, opacity: tipo.opacidad, depthWrite: false }));
             superficie.rotation.x = -Math.PI / 2; superficie.position.y = nivel; grupo.add(superficie);
             // espuma donde el agua toca el muro del fondo
             const espuma = new THREE.Mesh(new THREE.PlaneGeometry(gap, 0.6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }));
@@ -905,7 +904,7 @@
             sueloLago.position.set(xc, fondo - 2, 0);
             registrarEntorno(grupo, sueloLago, xc);
             rellenarHueco(xL, xR, fondo - 0.3, fIndex, fData);
-            lagosAnimados.push({ grupo, superficie, baseAgua, espuma: [espuma], fase: Math.random() * 6, xL, xR, nivel, fondo });
+            lagosAnimados.push({ grupo, superficie, baseAgua, espuma: [espuma], fase: Math.random() * 6, xL, xR, nivel, fondo, tipo: tipo.nombre });
             return nivel;
         }
         function actualizarLagos() {
@@ -1268,7 +1267,7 @@
                             registrarEntorno(mont, null, cx + gap/2); 
                         } 
                         
-                        const nivelLago = crearLagoTresD(cx, cx + gap, cyAnterior, cy, f, fData);
+                        const nivelLago = crearLagoTresD(cx, cx + gap, cyAnterior, cy, f, fData, elegirTipoAgua('lago'));
                         if (mont) montanasLago.push({ mont, clave: montanaKey, x: cx + gap/2, nivel: nivelLago, fData });
 
                         // ⚡ Efectos animados de agua (niebla, burbujas, salpicaduras)
@@ -1279,9 +1278,14 @@
                             gap * 0.5, 8, fData
                         );
                         registrarEntorno(efectos.grupo, null, cx + gap/2);
+                    } else if (Math.random() < 0.3) {
+                        // Charca: también hay agua en algunos huecos sueltos, con su fondo y su niebla
+                        const nivelCharca = crearLagoTresD(cx, cx + gap, cyAnterior, cy, f, fData, elegirTipoAgua('charca'));
+                        const efectosCharca = crearEfectosAgua(cx + gap/2, nivelCharca + 0.5, 0, gap * 0.5, 8, fData);
+                        registrarEntorno(efectosCharca.grupo, null, cx + gap/2);
+                    } else {
+                        crearFoso(cx, cx + gap, Math.min(cyAnterior + calcularOnda(cx), cy + calcularOnda(cx + gap)), f, fData);
                     }
-                    
-                    if (!(i > 0 && i % 4 === 0)) crearFoso(cx, cx + gap, Math.min(cyAnterior + calcularOnda(cx), cy + calcularOnda(cx + gap)), f, fData);
                     crearTerrenoOndulado(cx + gap, w, cy, f, fData, true); 
                     let slotRoca = cx + gap + w - 4; 
                     let slotBloque = cx + gap + w/2;
@@ -1410,12 +1414,9 @@
             }
             if (!colinasFondo) { colinasFondo = crearColinasFondo(-600, cx + 400); plantarHierbaColinas(-60, cx + 60); }
             for (const m of montanasLago) {
-                colocarMontana(m.mont, m.clave, m.x, alturaColinaFondo(m.x, -27), -27, 1.1);
-                let rio = null;
-                m.mont.traverse(c => { if (c.name === 'rio') rio = c; });
-                const cima = new THREE.Box3().setFromObject(m.mont).max.y - 0.5;
-                if (rio && cima - m.nivel > 2) crearCascadaEnLago(m.x, rio, m.nivel, cima - m.nivel, -3.4);
-                m.mont.traverse(c => { if (c.name === 'rio' || c.name.startsWith('espuma_cascada_')) c.visible = false; });
+                const z = zMontana(m.clave, ESCALA_MONTANA_LAGO, CARA_MONTANAS_LAGO);
+                colocarMontana(m.mont, m.clave, m.x, alturaColinaFondo(m.x, z), z, ESCALA_MONTANA_LAGO);
+                m.mont.traverse(c => { if (c.name === 'rio' || c.name.startsWith('espuma_cascada_')) c.visible = false; }); // sin cascadas: el agua está en los lagos
             }
             plantarCadenaMontanas(-40, cx + 40);
         }
