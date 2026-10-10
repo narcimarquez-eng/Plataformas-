@@ -340,7 +340,7 @@
 
         let gameState = 'menu', score = 0, lives = 5, bloquesInventario = 0, ultimoBloque = 0, fishingCooldown = 0, gemasRecogidas = 0;
         let pStats = { id: '', ammo: '', maxJumps: 1, speed: 0.38, projDmg: 1, projSpeed: 0.25, projLife: 70, ammoTex: null, ammoMat: null, ammoGeo: null };
-        let phys = { x: 0, y: 5, vx: 0, vy: 0, w: 1.2, h: 2.2, grounded: false, jumps: 0, prevJump: false, prevAct: false, prevFish: false, dir: 1, power: 'normal', invuln: 0, animTime: 0, prevDash: false, dashCooldown: 0, dashTime: 0, dashTrailTimer: 0, wasGrounded: true, comboCount: 0, comboTimer: 0, coyote: 0, isFishing: false, bufferSalto: 0, enSalto: false, rebote: 0 };
+        let phys = { x: 0, y: 5, vx: 0, vy: 0, w: 1.2, h: 2.2, grounded: false, jumps: 0, prevJump: false, prevAct: false, prevFish: false, dir: 1, power: 'normal', invuln: 0, animTime: 0, prevDash: false, dashCooldown: 0, dashTime: 0, dashTrailTimer: 0, wasGrounded: true, comboCount: 0, comboTimer: 0, coyote: 0, isFishing: false, bufferSalto: 0, enSalto: false, rebote: 0, muerte: null };
         let faseActual = 0, puntosInicioFase = [], scoreAlIniciarFase = 0; let gemas = [];
         const combNode = document.getElementById('combo-alert');
 
@@ -479,7 +479,7 @@
             }
         }
 
-        function spawnParticulas(x, y, colorHex) { let mat = getMatParticula(colorHex); for(let i=0; i<6; i++) { const p = new THREE.Mesh(geoParticula, mat); p.position.set(x, y, 0); scene.add(p); particulas.push({ mesh: p, vx: (Math.random()-0.5)*0.6, vy: Math.random()*0.6, life: 1 }); } }
+        function spawnParticulas(x, y, colorHex, n = 6, fuerza = 0.6) { let mat = getMatParticula(colorHex); for(let i=0; i<n; i++) { const p = new THREE.Mesh(geoParticula, mat); p.position.set(x, y, 0); scene.add(p); particulas.push({ mesh: p, vx: (Math.random()-0.5)*fuerza, vy: Math.random()*fuerza, life: 1 }); } }
 
         function calcularOnda(x) {
             let h = 0;
@@ -701,24 +701,24 @@
             mont.position.set(x, cyBase - 3 - baseY * escala, z);
         }
 
-        // Cascada del lago: cae desde la cima de la montaña y entra en el agua, delante del muro del fondo
-        function crearCascadaLago(xc, yAlto, yAgua, fData) {
-            const alto = yAlto - yAgua;
-            if (alto < 1) return null; // la montaña no llega al agua por encima del lago
+        // Cascada del lago: la pieza de agua del modelo, girada para caer en vertical delante del muro del fondo, hasta el estanque
+        function crearCascadaEnLago(xc, rio, yAgua, altoCaida, zCascada) {
+            const p = rio.geometry.attributes.position;
+            let minY = Infinity, maxY = -Infinity;
+            for (let i = 0; i < p.count; i++) { minY = Math.min(minY, p.getY(i)); maxY = Math.max(maxY, p.getY(i)); }
+            const media = (cond) => { let y = 0, z = 0, n = 0; for (let i = 0; i < p.count; i++) if (cond(p.getY(i))) { y += p.getY(i); z += p.getZ(i); n++; } return { y: y / n, z: z / n }; };
+            const arriba = media(y => y > maxY - 0.6), abajo = media(y => y < minY + 0.6);
+            const dy = arriba.y - abajo.y, dz = arriba.z - abajo.z;
+            const alfa = Math.atan2(-dz, dy); // gira la rampa hasta que quede vertical
+            const c = Math.cos(alfa), s = Math.sin(alfa);
+            const by = abajo.y * c - abajo.z * s, bz = abajo.y * s + abajo.z * c; // punto más bajo tras el giro
             const grupo = new THREE.Group();
-            [[-3.35, 0.6], [-3.6, 0.85]].forEach(([z, opacidad]) => {
-                const textura = texCascada.clone();
-                textura.needsUpdate = true;
-                textura.wrapS = THREE.RepeatWrapping; textura.wrapT = THREE.RepeatWrapping;
-                textura.repeat.set(1, 3);
-                const mat = new THREE.MeshStandardMaterial({ color: fData.aguaColor, map: textura, emissive: fData.aguaGlow, emissiveIntensity: 0.8, transparent: true, opacity: opacidad, roughness: 0.15, depthWrite: false, side: THREE.DoubleSide });
-                const lamina = new THREE.Mesh(new THREE.PlaneGeometry(4.2, alto), mat);
-                lamina.position.set(0, yAgua + alto / 2, z);
-                lamina.renderOrder = 3;
-                grupo.add(lamina);
-                riosAnimados.push(lamina);
-            });
-            grupo.position.x = xc;
+            const copia = rio.clone();
+            copia.rotation.set(alfa, 0, 0);
+            copia.position.set(0, -by, -bz);
+            grupo.add(copia);
+            grupo.scale.setScalar(altoCaida / Math.hypot(dy, dz));
+            grupo.position.set(xc, yAgua + 0.05, zCascada);
             registrarEntorno(grupo, null, xc);
             return grupo;
         }
@@ -844,13 +844,23 @@
 
         // ⚡ Lago hundido: el agua va dentro de una cuenca con los mismos materiales que las pasarelas, superficie que ondula y espuma en el fondo
         const lagosAnimados = [];
+        const fosos = []; // huecos entre pasarelas: su borde y su tramo para detectar la caída
+        let sacudidaCamara = 0;
         let tiempoAgua = 0;
         // Relleno de tierra bajo un hueco entre pasarelas: el vacío no deja ver el cielo
-        function rellenarHueco(xL, xR, topeY, fIndex, fData) {
+        function rellenarHueco(xL, xR, topeY, fIndex, fData, suelo = null) {
             const tierra = new THREE.Mesh(new THREE.BoxGeometry(xR - xL + 1, 40, 14), matFases[fIndex].bot); // medio metro bajo cada borde: sin rendijas
             tierra.position.set((xL + xR) / 2, topeY - 20, -3.5);
             tierra.receiveShadow = true;
-            registrarEntorno(tierra, null, (xL + xR) / 2);
+            registrarEntorno(tierra, suelo, (xL + xR) / 2);
+        }
+        // Foso entre dos pasarelas: su fondo queda 5 unidades bajo la más baja y tiene suelo físico, así la caída se para ahí
+        function crearFoso(xL, xR, bordeY, fIndex, fData) {
+            const topeY = bordeY - 5;
+            const suelo = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3((xR - xL) / 2 + 0.5, 2, 3.25)), material: matFisicas });
+            suelo.position.set((xL + xR) / 2, topeY - 2, 0);
+            rellenarHueco(xL, xR, topeY, fIndex, fData, suelo);
+            fosos.push({ xL, xR, bordeY });
         }
         function crearLagoTresD(xL, xR, cyIzq, cyDer, fIndex, fData) {
             const hz = 3.75, gap = xR - xL, xc = (xL + xR) / 2;
@@ -890,9 +900,12 @@
             // espuma donde el agua toca el muro del fondo
             const espuma = new THREE.Mesh(new THREE.PlaneGeometry(gap, 0.6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }));
             espuma.rotation.x = -Math.PI / 2; espuma.position.set(0, nivel + 0.05, -hz + 0.3); grupo.add(espuma);
-            registrarEntorno(grupo, null, xc);
+            // suelo físico de la cuenca: el héroe que cae al agua se para en el fondo
+            const sueloLago = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(gap / 2, 2, 3.25)), material: matFisicas });
+            sueloLago.position.set(xc, fondo - 2, 0);
+            registrarEntorno(grupo, sueloLago, xc);
             rellenarHueco(xL, xR, fondo - 0.3, fIndex, fData);
-            lagosAnimados.push({ grupo, superficie, baseAgua, espuma: [espuma], fase: Math.random() * 6 });
+            lagosAnimados.push({ grupo, superficie, baseAgua, espuma: [espuma], fase: Math.random() * 6, xL, xR, nivel, fondo });
             return nivel;
         }
         function actualizarLagos() {
@@ -1268,7 +1281,7 @@
                         registrarEntorno(efectos.grupo, null, cx + gap/2);
                     }
                     
-                    if (!(i > 0 && i % 4 === 0)) rellenarHueco(cx, cx + gap, Math.min(cyAnterior + calcularOnda(cx), cy + calcularOnda(cx + gap)) - 5, f, fData);
+                    if (!(i > 0 && i % 4 === 0)) crearFoso(cx, cx + gap, Math.min(cyAnterior + calcularOnda(cx), cy + calcularOnda(cx + gap)), f, fData);
                     crearTerrenoOndulado(cx + gap, w, cy, f, fData, true); 
                     let slotRoca = cx + gap + w - 4; 
                     let slotBloque = cx + gap + w/2;
@@ -1398,8 +1411,11 @@
             if (!colinasFondo) { colinasFondo = crearColinasFondo(-600, cx + 400); plantarHierbaColinas(-60, cx + 60); }
             for (const m of montanasLago) {
                 colocarMontana(m.mont, m.clave, m.x, alturaColinaFondo(m.x, -27), -27, 1.1);
+                let rio = null;
+                m.mont.traverse(c => { if (c.name === 'rio') rio = c; });
+                const cima = new THREE.Box3().setFromObject(m.mont).max.y - 0.5;
+                if (rio && cima - m.nivel > 2) crearCascadaEnLago(m.x, rio, m.nivel, cima - m.nivel, -3.4);
                 m.mont.traverse(c => { if (c.name === 'rio' || c.name.startsWith('espuma_cascada_')) c.visible = false; });
-                crearCascadaLago(m.x, new THREE.Box3().setFromObject(m.mont).max.y - 1, m.nivel, m.fData);
             }
             plantarCadenaMontanas(-40, cx + 40);
         }
@@ -1569,6 +1585,121 @@
             if (!phys.isFishing) suavizar(n.armR, pose.armR);
         }
 
+        // Reaparición tras caer: en la pasarela más cercana a la última pisada, con una vida menos
+        function reaparecerTrasCaida() {
+            const rescate = puntoDeRescate();
+            if (rescate) { lastSafeX = rescate.x; lastSafeY = rescate.y; }
+            playerBody.position.set(lastSafeX + 0.6, lastSafeY + 3.6, 0); playerBody.velocity.set(0,0,0);
+            phys.x = lastSafeX; phys.y = lastSafeY + 3; // el paso siguiente activa las pasarelas de aquí, no las de la caída
+            playerWrapper.scale.setScalar(phys.power === 'super' ? 1.2 : 1.0);
+            takeDamage();
+        }
+
+        // ¿Ha caído el héroe a un lago (bajo la superficie) o a un foso (bajo el borde de las pasarelas)?
+        function tipoDeCaida() {
+            const cx = phys.x + 0.6;
+            for (const l of lagosAnimados) if (cx > l.xL && cx < l.xR && phys.y < l.nivel - 0.2) return { tipo: 'agua', nivel: l.nivel };
+            for (const f of fosos) if (cx > f.xL && cx < f.xR && phys.y < f.bordeY - 1.5) return { tipo: 'foso' };
+            return null;
+        }
+
+        function iniciarMuerte(caida) {
+            phys.muerte = { tipo: caida.tipo, t: 0, duracion: caida.tipo === 'agua' ? 150 : 100, nivel: caida.nivel, vyAnterior: 0, impacto: false, tImpacto: 0, anillo: null };
+            if (caida.tipo === 'agua') {
+                playSound('splash');
+                spawnParticulas(phys.x + 0.6, caida.nivel, 0xE6F7FF, 14, 0.7);
+                phys.muerte.anillo = new THREE.Mesh(new THREE.RingGeometry(0.4, 0.6, 32), new THREE.MeshBasicMaterial({ color: 0xE6F7FF, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+                phys.muerte.anillo.rotation.x = -Math.PI / 2;
+                phys.muerte.anillo.position.set(phys.x + 0.6, caida.nivel + 0.1, 0);
+                scene.add(phys.muerte.anillo);
+            }
+        }
+        function quitarAnillo(m) {
+            if (!m.anillo) return;
+            scene.remove(m.anillo); m.anillo.geometry.dispose(); m.anillo.material.dispose(); m.anillo = null;
+        }
+
+        // Caída con animación propia: en el agua el héroe se hunde despacio; en el foso aterriza con polvo y sacudida.
+        // Al acabar reaparece en tierra firme con una vida menos.
+        function actualizarMuerte() {
+            const m = phys.muerte;
+            m.t++;
+            m.vyAnterior = playerBody.velocity.y;
+            world.step((1 / 60) * GAME_SPEED);
+            phys.vx = playerBody.velocity.x; phys.vy = playerBody.velocity.y; phys.x = playerBody.position.x - 0.6; phys.y = playerBody.position.y - 0.6;
+            phys.grounded = false; // pose de caída (brazos arriba) durante toda la animación
+            animarPersonaje();
+            playerWrapper.visible = true;
+            playerWrapper.position.set(playerBody.position.x, phys.y, 0);
+            const base = phys.power === 'super' ? 1.2 : 1.0;
+            if (m.tipo === 'agua') {
+                if (phys.y < m.nivel) {
+                    // bajo el agua el movimiento se frena y el héroe baja despacio hasta el fondo
+                    playerBody.velocity.y = Math.max(playerBody.velocity.y * 0.85, -3);
+                    playerBody.velocity.x *= 0.9;
+                    if (m.t % 10 === 0) spawnParticulas(phys.x + 0.6, phys.y + 0.8, 0xE6F7FF, 2, 0.25); // burbujas
+                }
+                if (m.anillo) {
+                    const k = Math.min(1, m.t / 45);
+                    m.anillo.scale.setScalar(1 + 5 * k);
+                    m.anillo.material.opacity = 0.9 * (1 - k);
+                    if (k >= 1) quitarAnillo(m);
+                }
+            } else if (!m.impacto && m.vyAnterior < -6 && playerBody.velocity.y > -2) {
+                // aterrizaje en el fondo del foso: polvo, sonido y sacudida de cámara
+                m.impacto = true;
+                playSound('hit');
+                spawnParticulas(phys.x + 0.6, phys.y + 0.1, 0xB58B5A, 12, 0.5);
+                sacudidaCamara = 0.5;
+            }
+            if (m.impacto) {
+                // el cuerpo se aplasta al caer y recupera su forma
+                m.tImpacto++;
+                const k = Math.max(0, 1 - m.tImpacto / 20);
+                playerWrapper.scale.set(base * (1 + 0.35 * k), base * (1 - 0.45 * k), base * (1 + 0.35 * k));
+            }
+            actualizarParticulas();
+            seguirHeroe();
+            if (m.t >= m.duracion) {
+                quitarAnillo(m);
+                phys.muerte = null;
+                reaparecerTrasCaida();
+            }
+        }
+
+        function actualizarParticulas() {
+            for(let i=particulas.length-1; i>=0; i--) { 
+                let p = particulas[i]; 
+                p.mesh.position.x += p.vx * GAME_SPEED; 
+                p.mesh.position.y += p.vy * GAME_SPEED; 
+                p.vy -= 0.02 * GAME_SPEED; 
+                p.life -= 0.05 * GAME_SPEED; 
+                p.mesh.scale.setScalar(Math.max(0, p.life)); 
+                if(p.life <= 0) { scene.remove(p.mesh); particulas.splice(i,1); } 
+            }
+        }
+
+        // Luz y cámara siguen al héroe; la sacudida de un aterrizaje se apaga poco a poco
+        function seguirHeroe() {
+            dirLight.position.x = phys.x + 10;
+            dirLight.target.position.set(phys.x, phys.y, 0);
+            dirLight.target.updateMatrixWorld();
+
+            // CÁMARA FIJA: sigue al héroe sin girar; el zoom cambia la distancia
+            const camTargetX = phys.x;
+            const camTargetY = phys.y + 2;
+            camera.position.x += (camTargetX - camera.position.x) * (0.1 * GAME_SPEED);
+            camera.position.y += (camTargetY + 4 - camera.position.y) * (0.08 * GAME_SPEED);
+            camera.position.z += (cameraZoom - camera.position.z) * (0.1 * GAME_SPEED);
+            if (sacudidaCamara > 0.01) {
+                camera.position.x += (Math.random() - 0.5) * sacudidaCamara;
+                camera.position.y += (Math.random() - 0.5) * sacudidaCamara;
+                sacudidaCamara *= 0.85;
+            }
+            camera.lookAt(camTargetX, camTargetY, -2);
+            cieloDomo.position.copy(camera.position);
+        }
+
         function actualizarJuego() {
             let px = phys.x;
             const DIST_VISION = 60;
@@ -1611,6 +1742,9 @@
             // ⚡ Niebla / burbujas / salpicaduras en las pozas y cascadas
             actualizarEfectosAgua();
             actualizarLagos();
+
+            // Caída al agua o a un foso: la animación tiene su propio bucle hasta reaparecer
+            if (phys.muerte) { actualizarMuerte(); return; }
 
             if(phys.invuln > 0) { phys.invuln -= GAME_SPEED; playerWrapper.visible = (Math.floor(Date.now()/100)%2===0); } else playerWrapper.visible = true;
             if(fishingCooldown > 0) fishingCooldown -= GAME_SPEED;
@@ -1724,13 +1858,8 @@
             phys.vx = playerBody.velocity.x; phys.vy = playerBody.velocity.y; phys.x = playerBody.position.x - 0.6; phys.y = playerBody.position.y - 0.6;
             if (faseActual < configFases.length - 1 && phys.x >= puntosInicioFase[faseActual + 1]) { faseActual++; setEntornoFase(faseActual); scoreAlIniciarFase = score; }
             if(phys.grounded && tierraFirme(phys.x, phys.y)) { lastSafeX = phys.x; lastSafeY = phys.y; }
-            if(phys.y < -20) {
-                const rescate = puntoDeRescate();
-                if (rescate) { lastSafeX = rescate.x; lastSafeY = rescate.y; }
-                playerBody.position.set(lastSafeX + 0.6, lastSafeY + 3.6, 0); playerBody.velocity.set(0,0,0);
-                phys.x = lastSafeX; phys.y = lastSafeY + 3; // el paso siguiente activa las pasarelas de aquí, no las de la caída
-                takeDamage();
-            }
+            if(phys.y < -20) reaparecerTrasCaida();
+            else { const caida = tipoDeCaida(); if (caida) iniciarMuerte(caida); }
 
             playerWrapper.position.set(playerBody.position.x, phys.y, 0);
 
@@ -1976,28 +2105,9 @@
                 }
             }
 
-            for(let i=particulas.length-1; i>=0; i--) { 
-                let p = particulas[i]; 
-                p.mesh.position.x += p.vx * GAME_SPEED; 
-                p.mesh.position.y += p.vy * GAME_SPEED; 
-                p.vy -= 0.02 * GAME_SPEED; 
-                p.life -= 0.05 * GAME_SPEED; 
-                p.mesh.scale.setScalar(Math.max(0, p.life)); 
-                if(p.life <= 0) { scene.remove(p.mesh); particulas.splice(i,1); } 
-            }
+            actualizarParticulas();
 
-            dirLight.position.x = phys.x + 10; 
-            dirLight.target.position.set(phys.x, phys.y, 0); 
-            dirLight.target.updateMatrixWorld();
-
-            // CÁMARA FIJA: sigue al héroe sin girar; el zoom cambia la distancia
-            const camTargetX = phys.x;
-            const camTargetY = phys.y + 2;
-            camera.position.x += (camTargetX - camera.position.x) * (0.1 * GAME_SPEED);
-            camera.position.y += (camTargetY + 4 - camera.position.y) * (0.08 * GAME_SPEED);
-            camera.position.z += (cameraZoom - camera.position.z) * (0.1 * GAME_SPEED);
-            camera.lookAt(camTargetX, camTargetY, -2);
-            cieloDomo.position.copy(camera.position);
+            seguirHeroe();
 
         }
     </script>
